@@ -67,6 +67,20 @@ export async function updateDineTable(id: number, name: string, seats: number): 
   await db.update(schema.dineTables).set({ name, seats }).where(eq(schema.dineTables.id, id));
 }
 
-export async function deleteDineTable(id: number): Promise<void> {
+export type DeleteDineTableResult = { outcome: 'deleted' } | { outcome: 'has_orders' };
+
+// orders.dine_table_id references this table with no cascade -- once a
+// table has any order history (even closed), deleting it outright would
+// hit an unhandled FK violation (500) instead of a clean 409.
+export async function deleteDineTable(id: number): Promise<DeleteDineTableResult> {
+  const [existingOrder] = await db
+    .select({ id: schema.orders.id })
+    .from(schema.orders)
+    .where(eq(schema.orders.dineTableId, id));
+  if (existingOrder) {
+    return { outcome: 'has_orders' };
+  }
+
   await db.delete(schema.dineTables).where(eq(schema.dineTables.id, id));
+  return { outcome: 'deleted' };
 }

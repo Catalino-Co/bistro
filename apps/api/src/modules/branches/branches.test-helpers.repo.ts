@@ -32,8 +32,30 @@ export async function deleteBranchFixture(fixture: BranchFixture): Promise<void>
   await db.delete(schema.sessions).where(eq(schema.sessions.branchId, fixture.branchId));
   await db.delete(schema.auditLog).where(eq(schema.auditLog.branchId, fixture.branchId));
   await db.delete(schema.userRoles).where(eq(schema.userRoles.branchId, fixture.branchId));
-  // orders.dine_table_id references dining_tables, so this must run before
-  // the dine area/table sweep below deletes the tables an order points to.
+
+  // order_lines/order_line_modifiers reference orders, and orders.dine_table_id
+  // references dining_tables -- both must clear before the orders delete and
+  // the dine area/table sweep below, respectively.
+  const orderIds = (
+    await db
+      .select({ id: schema.orders.id })
+      .from(schema.orders)
+      .where(eq(schema.orders.branchId, fixture.branchId))
+  ).map((r) => r.id);
+  if (orderIds.length > 0) {
+    const lineIds = (
+      await db
+        .select({ id: schema.orderLines.id })
+        .from(schema.orderLines)
+        .where(inArray(schema.orderLines.orderId, orderIds))
+    ).map((r) => r.id);
+    if (lineIds.length > 0) {
+      await db
+        .delete(schema.orderLineModifiers)
+        .where(inArray(schema.orderLineModifiers.orderLineId, lineIds));
+      await db.delete(schema.orderLines).where(inArray(schema.orderLines.id, lineIds));
+    }
+  }
   await db.delete(schema.orders).where(eq(schema.orders.branchId, fixture.branchId));
 
   // Safety net for a test that failed partway through its own cleanup of

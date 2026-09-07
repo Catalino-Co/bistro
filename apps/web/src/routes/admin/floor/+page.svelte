@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { apiFetch } from '$lib/api.js';
 	import { session } from '$lib/session.svelte.js';
 
@@ -114,6 +115,25 @@
 		}
 	}
 
+	async function openOrder(dineTableId: number) {
+		const response = await apiFetch('/orders', {
+			method: 'POST',
+			body: JSON.stringify({ dineTableId }),
+		});
+		if (response.ok) {
+			const { order } = (await response.json()) as { order: { id: number } };
+			goto(`/pos/${order.id}`);
+		}
+	}
+
+	async function viewOrder(dineTableId: number) {
+		const response = await apiFetch(`/orders/for-table/${dineTableId}`);
+		if (response.ok) {
+			const { order } = (await response.json()) as { order: { id: number } | null };
+			if (order) goto(`/pos/${order.id}`);
+		}
+	}
+
 	$effect(() => {
 		loadDineAreas();
 	});
@@ -157,6 +177,11 @@
 						<li>
 							{table.name} ({table.seats} puestos) — {table.status}
 							<button onclick={() => deleteTable(table.id)}>Eliminar</button>
+							{#if table.status === 'available'}
+								<button onclick={() => openOrder(table.id)}>Abrir orden</button>
+							{:else if table.status === 'occupied'}
+								<button onclick={() => viewOrder(table.id)}>Ver orden</button>
+							{/if}
 						</li>
 					{/each}
 				</ul>

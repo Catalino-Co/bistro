@@ -67,6 +67,13 @@ describe('orders routes', () => {
     expect(open.statusCode).toBe(201);
     const orderId = (open.json() as { order: { id: number } }).order.id;
 
+    const forTable = await app.inject({
+      method: 'GET',
+      url: `/orders/for-table/${table.id}`,
+      headers: { cookie },
+    });
+    expect((forTable.json() as { order: { id: number } | null }).order?.id).toBe(orderId);
+
     const secondOpen = await app.inject({
       method: 'POST',
       url: '/orders',
@@ -82,6 +89,13 @@ describe('orders routes', () => {
       headers: { cookie, 'x-csrf-token': csrfToken },
     });
     expect(close.statusCode).toBe(204);
+
+    const forTableAfterClose = await app.inject({
+      method: 'GET',
+      url: `/orders/for-table/${table.id}`,
+      headers: { cookie },
+    });
+    expect((forTableAfterClose.json() as { order: unknown }).order).toBeNull();
 
     // The table is available again, so a fresh order can be opened on it.
     const reopen = await app.inject({

@@ -64,6 +64,13 @@
       "when": 1788814837248,
       "tag": "0008_lazy_franklin_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788818238043,
+      "tag": "0009_clever_strong_guy",
+      "breakpoints": true
     }
   ]
 }

@@ -117,7 +117,11 @@ export async function floorRoutes(app: FastifyInstance) {
     '/floor/tables/:id',
     { config: { permissions: [...MANAGE_FLOOR] } },
     async (request, reply) => {
-      await deleteDineTable(Number((request.params as { id: string }).id));
+      const result = await deleteDineTable(Number((request.params as { id: string }).id));
+      if (result.outcome === 'has_orders') {
+        reply.code(409);
+        return { error: 'table_has_orders' };
+      }
       reply.code(204);
       return null;
     },

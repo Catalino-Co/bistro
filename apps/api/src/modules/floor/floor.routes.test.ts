@@ -160,4 +160,49 @@ describe('floor routes', () => {
     });
     expect((finalList.json() as { dineAreas: unknown[] }).dineAreas).toHaveLength(0);
   });
+
+  it('rejects deleting a table that has order history, even once the order is closed', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/branches/select',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { branchId: branchA.branchId },
+    });
+
+    const createArea = await app.inject({
+      method: 'POST',
+      url: '/floor/dine-areas',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { name: '__floor_test_area_orders__' },
+    });
+    const areaId = (createArea.json() as { dineArea: { id: number } }).dineArea.id;
+    const createTable = await app.inject({
+      method: 'POST',
+      url: '/floor/tables',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { dineAreaId: areaId, name: '__floor_test_table_orders__', seats: 2 },
+    });
+    const tableId = (createTable.json() as { table: { id: number } }).table.id;
+
+    const openOrder = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { dineTableId: tableId },
+    });
+    const orderId = (openOrder.json() as { order: { id: number } }).order.id;
+    await app.inject({
+      method: 'POST',
+      url: `/orders/${orderId}/close`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+    });
+
+    const deleteTable = await app.inject({
+      method: 'DELETE',
+      url: `/floor/tables/${tableId}`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+    });
+    expect(deleteTable.statusCode).toBe(409);
+    expect((deleteTable.json() as { error: string }).error).toBe('table_has_orders');
+  });
 });
