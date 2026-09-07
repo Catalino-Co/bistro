@@ -10,11 +10,18 @@ export async function authRoutes(app: FastifyInstance) {
       return { error: 'invalid_request' };
     }
 
-    const user = await verifyCredentials(parsed.data.username, parsed.data.password);
-    if (!user) {
+    const outcome = await verifyCredentials(parsed.data.username, parsed.data.password, request.ip);
+
+    if (outcome.status === 'locked') {
+      reply.code(429);
+      return { error: 'too_many_attempts' };
+    }
+    if (outcome.status === 'invalid_credentials') {
       reply.code(401);
       return { error: 'invalid_credentials' };
     }
+
+    const { user } = outcome;
 
     // Regenerate before writing the authenticated identity onto the
     // session: this rotates the session id on login (fixes the legacy's

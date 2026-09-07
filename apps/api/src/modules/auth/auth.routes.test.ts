@@ -2,7 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { cookieValue, findCookiePair, mergeCookies } from '../../test-support/http.js';
-import { closeTestDbPool, createTestUser, deleteTestUser } from './test-helpers.repo.js';
+import {
+  closeTestDbPool,
+  createTestUser,
+  deleteLoginAttempts,
+  deleteTestUser,
+} from './test-helpers.repo.js';
 
 const TEST_USERNAME = '__auth_test_user__';
 const TEST_PASSWORD = 'CorrectHorseBatteryStaple1!';
@@ -22,10 +27,12 @@ describe('auth routes', () => {
   const app = buildApp();
 
   beforeAll(async () => {
+    await deleteLoginAttempts(TEST_USERNAME);
     await createTestUser(TEST_USERNAME, TEST_PASSWORD);
   });
 
   afterAll(async () => {
+    await deleteLoginAttempts(TEST_USERNAME);
     await deleteTestUser(TEST_USERNAME);
     await app.close();
     await closeTestDbPool();

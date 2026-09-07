@@ -1,5 +1,5 @@
 import { db, schema } from '@bistro/db';
-import { eq } from 'drizzle-orm';
+import { and, count, eq, gte } from 'drizzle-orm';
 
 export interface UserRow {
   id: number;
@@ -22,4 +22,31 @@ export async function findUserByUsername(username: string): Promise<UserRow | nu
     .where(eq(schema.users.username, username));
 
   return row ?? null;
+}
+
+export async function countRecentFailedLoginAttempts(
+  username: string,
+  sinceMinutesAgo: number,
+): Promise<number> {
+  const since = new Date(Date.now() - sinceMinutesAgo * 60 * 1000);
+  const [row] = await db
+    .select({ value: count() })
+    .from(schema.loginAttempts)
+    .where(
+      and(
+        eq(schema.loginAttempts.username, username),
+        eq(schema.loginAttempts.succeeded, false),
+        gte(schema.loginAttempts.attemptedAt, since),
+      ),
+    );
+
+  return row?.value ?? 0;
+}
+
+export async function recordLoginAttempt(
+  username: string,
+  succeeded: boolean,
+  ipAddress: string | null,
+): Promise<void> {
+  await db.insert(schema.loginAttempts).values({ username, succeeded, ipAddress });
 }

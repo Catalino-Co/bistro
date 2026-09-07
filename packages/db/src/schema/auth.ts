@@ -1,4 +1,4 @@
-import { bigint, jsonb, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, boolean, index, jsonb, text, timestamp } from 'drizzle-orm/pg-core';
 import { bistro } from './_shared.js';
 import { branches } from './org.js';
 import { users } from './users.js';
@@ -17,3 +17,21 @@ export const sessions = bistro.table('sessions', {
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 });
+
+// One row per login attempt (by username, not user_id -- an attempt against
+// a nonexistent username is still worth recording). The lockout check in
+// auth.service.ts counts recent failures in a sliding window; the legacy
+// had zero rate limiting or lockout on login at all.
+export const loginAttempts = bistro.table(
+  'login_attempts',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    username: text('username').notNull(),
+    succeeded: boolean('succeeded').notNull(),
+    ipAddress: text('ip_address'),
+    attemptedAt: timestamp('attempted_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('login_attempts_username_attempted_at_idx').on(table.username, table.attemptedAt),
+  ],
+);

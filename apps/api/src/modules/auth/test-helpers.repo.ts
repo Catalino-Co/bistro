@@ -32,6 +32,10 @@ export async function deleteTestUser(username: string): Promise<void> {
   await db.delete(schema.users).where(eq(schema.users.id, user.id));
 }
 
+export async function deleteLoginAttempts(username: string): Promise<void> {
+  await db.delete(schema.loginAttempts).where(eq(schema.loginAttempts.username, username));
+}
+
 export async function closeTestDbPool(): Promise<void> {
   await pool.end();
 }
