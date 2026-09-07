@@ -20,6 +20,9 @@ importers:
       '@bistro/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@bistro/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@fastify/cookie':
         specifier: ^11.0.1
         version: 11.1.2

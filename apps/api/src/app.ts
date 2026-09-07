@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { authRoutes } from './modules/auth/auth.routes.js';
+import guardPlugin from './plugins/guard.js';
 import sessionPlugin from './plugins/session.js';
 
 export function buildApp(): FastifyInstance {
@@ -8,6 +9,7 @@ export function buildApp(): FastifyInstance {
   });
 
   app.register(sessionPlugin);
+  app.register(guardPlugin);
   app.register(authRoutes);
 
   app.get('/health', { config: { public: true } }, async () => ({ status: 'ok' }));
