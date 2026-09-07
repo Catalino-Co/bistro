@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { branchesRoutes } from './modules/branches/branches.routes.js';
+import { catalogRoutes } from './modules/catalog/catalog.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { rbacRoutes } from './modules/rbac/rbac.routes.js';
 import csrfPlugin from './plugins/csrf.js';
@@ -26,6 +27,7 @@ export function buildApp(): FastifyInstance {
   app.register(authRoutes);
   app.register(branchesRoutes);
   app.register(rbacRoutes);
+  app.register(catalogRoutes);
   app.register(healthRoutes);
 
   return app;

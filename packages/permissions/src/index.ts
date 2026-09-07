@@ -21,6 +21,10 @@ export const PERMISSIONS = [
     key: 'system.branches.manage',
     description: 'Create/edit companies, business units, and branches',
   },
+  {
+    key: 'catalog.manage',
+    description: 'Create/edit categories, families, subfamilies, and items',
+  },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]['key'];
