@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const openOrderBodySchema = z.object({
   dineTableId: z.number().int().positive(),
+  dispatchMode: z.enum(['dine_in', 'delivery', 'pickup', 'room_service']).default('dine_in'),
+  customerId: z.number().int().positive().optional(),
 });
 
 export const addOrderLineBodySchema = z.object({

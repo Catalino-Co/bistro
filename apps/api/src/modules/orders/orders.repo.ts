@@ -1,17 +1,36 @@
 import { db, schema } from '@bistro/db';
 import { and, eq, inArray } from 'drizzle-orm';
 
+export type DispatchMode = 'dine_in' | 'delivery' | 'pickup' | 'room_service';
+
 export interface OrderRow {
   id: number;
   branchId: number;
   dineTableId: number;
   status: 'open' | 'closed';
+  dispatchMode: DispatchMode;
+  customerId: number | null;
 }
 
 export type OpenOrderResult =
   | { outcome: 'opened'; order: OrderRow }
   | { outcome: 'table_not_found' }
-  | { outcome: 'table_occupied' };
+  | { outcome: 'table_occupied' }
+  | { outcome: 'room_service_not_allowed' };
+
+// The trigger in migration 0011 raises this SQLSTATE (23514, "check
+// violation") when a room_service order's customer doesn't exist or its
+// type doesn't allow room service -- a client bypassing the API entirely
+// (or a future caller of openOrder that forgets to validate) still can't
+// slip an invalid order past the DB.
+function isCheckViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === '23514'
+  );
+}
 
 // Lets the floor UI resolve "this table is occupied" back to the order id
 // it needs to link to, without keeping that mapping in client-side state.
@@ -25,6 +44,8 @@ export async function findOpenOrderForTable(
       branchId: schema.orders.branchId,
       dineTableId: schema.orders.dineTableId,
       status: schema.orders.status,
+      dispatchMode: schema.orders.dispatchMode,
+      customerId: schema.orders.customerId,
     })
     .from(schema.orders)
     .where(
@@ -40,35 +61,53 @@ export async function findOpenOrderForTable(
 // Opening an order and occupying its table must happen atomically -- a
 // failure between the two steps would otherwise leave a table marked
 // available with an open order already sitting on it (or the reverse).
-export async function openOrder(branchId: number, dineTableId: number): Promise<OpenOrderResult> {
-  return db.transaction(async (tx) => {
-    const [table] = await tx
-      .select({ id: schema.dineTables.id, status: schema.dineTables.status })
-      .from(schema.dineTables)
-      .innerJoin(schema.dineAreas, eq(schema.dineTables.dineAreaId, schema.dineAreas.id))
-      .where(and(eq(schema.dineTables.id, dineTableId), eq(schema.dineAreas.branchId, branchId)))
-      .for('update');
+export async function openOrder(
+  branchId: number,
+  dineTableId: number,
+  dispatchMode: DispatchMode = 'dine_in',
+  customerId?: number,
+): Promise<OpenOrderResult> {
+  try {
+    return await db.transaction(async (tx) => {
+      const [table] = await tx
+        .select({ id: schema.dineTables.id, status: schema.dineTables.status })
+        .from(schema.dineTables)
+        .innerJoin(schema.dineAreas, eq(schema.dineTables.dineAreaId, schema.dineAreas.id))
+        .where(and(eq(schema.dineTables.id, dineTableId), eq(schema.dineAreas.branchId, branchId)))
+        .for('update');
 
-    if (!table) {
-      return { outcome: 'table_not_found' };
+      if (!table) {
+        return { outcome: 'table_not_found' };
+      }
+      if (table.status !== 'available') {
+        return { outcome: 'table_occupied' };
+      }
+
+      const [order] = await tx
+        .insert(schema.orders)
+        .values({
+          branchId,
+          dineTableId,
+          status: 'open',
+          dispatchMode,
+          customerId: customerId ?? null,
+        })
+        .returning();
+      if (!order) throw new Error('Failed to open order');
+
+      await tx
+        .update(schema.dineTables)
+        .set({ status: 'occupied' })
+        .where(eq(schema.dineTables.id, dineTableId));
+
+      return { outcome: 'opened', order };
+    });
+  } catch (error) {
+    if (isCheckViolation(error)) {
+      return { outcome: 'room_service_not_allowed' };
     }
-    if (table.status !== 'available') {
-      return { outcome: 'table_occupied' };
-    }
-
-    const [order] = await tx
-      .insert(schema.orders)
-      .values({ branchId, dineTableId, status: 'open' })
-      .returning();
-    if (!order) throw new Error('Failed to open order');
-
-    await tx
-      .update(schema.dineTables)
-      .set({ status: 'occupied' })
-      .where(eq(schema.dineTables.id, dineTableId));
-
-    return { outcome: 'opened', order };
-  });
+    throw error;
+  }
 }
 
 export type CloseOrderResult =

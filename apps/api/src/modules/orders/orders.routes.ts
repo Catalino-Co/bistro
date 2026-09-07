@@ -25,7 +25,12 @@ export async function ordersRoutes(app: FastifyInstance) {
       return { error: 'invalid_request' };
     }
 
-    const result = await openOrder(branchId, parsed.data.dineTableId);
+    const result = await openOrder(
+      branchId,
+      parsed.data.dineTableId,
+      parsed.data.dispatchMode,
+      parsed.data.customerId,
+    );
     switch (result.outcome) {
       case 'table_not_found':
         reply.code(404);
@@ -33,6 +38,9 @@ export async function ordersRoutes(app: FastifyInstance) {
       case 'table_occupied':
         reply.code(409);
         return { error: 'table_occupied' };
+      case 'room_service_not_allowed':
+        reply.code(409);
+        return { error: 'room_service_not_allowed' };
       case 'opened':
         reply.code(201);
         return { order: result.order };

@@ -1,5 +1,5 @@
 import { db, schema } from '@bistro/db';
-import { inArray, like } from 'drizzle-orm';
+import { eq, inArray, like } from 'drizzle-orm';
 
 // Own "__orders_test_" prefix, distinct from catalog/modifiers test suites'
 // own prefixes -- see modifiers.test-helpers.repo.ts for why sharing a
@@ -67,6 +67,39 @@ export async function createModifierFixture(
   await db.insert(schema.itemModifierGroups).values({ itemId, modifierGroupId: group!.id });
 
   return { groupId: group!.id, modifierId: modifier!.id };
+}
+
+export async function findCustomerTypeIdByName(name: string): Promise<number> {
+  const [row] = await db
+    .select({ id: schema.customerTypes.id })
+    .from(schema.customerTypes)
+    .where(eq(schema.customerTypes.name, name));
+  if (!row) {
+    throw new Error(`Customer type not found: ${name} -- run the db seed first`);
+  }
+  return row.id;
+}
+
+export async function createCustomerFixture(
+  suffix: string,
+  customerTypeId: number,
+): Promise<number> {
+  const [customer] = await db
+    .insert(schema.customers)
+    .values({ customerTypeId, name: `__orders_test_customer_${suffix}__` })
+    .returning();
+  return customer!.id;
+}
+
+// ID-scoped (not a wildcard sweep) because dispatch-mode.routes.test.ts
+// runs concurrently with order-lines.routes.test.ts, which shares this
+// module's "__orders_test_" prefix for its own item/modifier fixtures --
+// a wildcard customers delete here is harmless today (no other suite
+// creates customers), but a wildcard delete on a table another
+// concurrently-running suite is still using is exactly the race that
+// deleteOrdersTestData's item/modifier sweep below already hit once.
+export async function deleteCustomerFixture(customerId: number): Promise<void> {
+  await db.delete(schema.customers).where(eq(schema.customers.id, customerId));
 }
 
 export async function deleteOrdersTestData(): Promise<void> {
