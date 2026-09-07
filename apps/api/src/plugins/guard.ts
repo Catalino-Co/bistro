@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin';
+import { recordAuditEvent } from '../modules/audit/audit.repo.js';
 import { getUserPermissionKeys } from '../modules/guard/guard.repo.js';
 
 // Deny-by-default: the legacy system had this exact inversion (93 of 95
@@ -18,9 +19,21 @@ export default fp(async function guardPlugin(app) {
       return;
     }
 
-    if (!Array.isArray(config.permissions)) {
+    async function denyForbidden(reason: 'no_config' | 'missing_permission') {
       reply.code(403);
+      await recordAuditEvent({
+        actionKey: 'guard.denied',
+        entityType: 'route',
+        entityId: request.url,
+        afterData: { reason, method: request.method },
+        userId: typeof request.session.userId === 'number' ? request.session.userId : undefined,
+        ipAddress: request.ip,
+      });
       return reply.send({ error: 'forbidden' });
+    }
+
+    if (!Array.isArray(config.permissions)) {
+      return denyForbidden('no_config');
     }
 
     const userId = request.session.userId;
@@ -36,8 +49,7 @@ export default fp(async function guardPlugin(app) {
     const granted = await getUserPermissionKeys(userId);
     const hasRequiredPermission = config.permissions.some((key) => granted.has(key));
     if (!hasRequiredPermission) {
-      reply.code(403);
-      return reply.send({ error: 'forbidden' });
+      return denyForbidden('missing_permission');
     }
   });
 });

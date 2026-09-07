@@ -25,10 +25,11 @@ export async function deleteTestUser(username: string): Promise<void> {
     return;
   }
 
-  // Sessions reference users with no cascade, so any session left over from
-  // a login in the test (e.g. if an assertion failed before logout) would
-  // otherwise block this delete.
+  // Sessions and audit_log both reference users with no cascade, so any
+  // session or audit event left over from the test (logins, guard denials,
+  // rbac changes) would otherwise block this delete.
   await db.delete(schema.sessions).where(eq(schema.sessions.userId, user.id));
+  await db.delete(schema.auditLog).where(eq(schema.auditLog.userId, user.id));
   await db.delete(schema.users).where(eq(schema.users.id, user.id));
 }
 

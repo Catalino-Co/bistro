@@ -29,6 +29,13 @@
       "when": 1788809286941,
       "tag": "0003_condemned_kitty_pryde",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788809821150,
+      "tag": "0004_fine_emma_frost",
+      "breakpoints": true
     }
   ]
 }

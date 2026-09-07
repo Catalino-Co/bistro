@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { recordAuditEvent } from '../audit/audit.repo.js';
 import { loginBodySchema } from './auth.schema.js';
 import { verifyCredentials } from './auth.service.js';
 
@@ -14,10 +15,22 @@ export async function authRoutes(app: FastifyInstance) {
 
     if (outcome.status === 'locked') {
       reply.code(429);
+      await recordAuditEvent({
+        actionKey: 'auth.login_locked',
+        entityType: 'user',
+        entityId: parsed.data.username,
+        ipAddress: request.ip,
+      });
       return { error: 'too_many_attempts' };
     }
     if (outcome.status === 'invalid_credentials') {
       reply.code(401);
+      await recordAuditEvent({
+        actionKey: 'auth.login_failed',
+        entityType: 'user',
+        entityId: parsed.data.username,
+        ipAddress: request.ip,
+      });
       return { error: 'invalid_credentials' };
     }
 
@@ -33,12 +46,28 @@ export async function authRoutes(app: FastifyInstance) {
       request.session.branchId = user.branchId;
     }
 
+    await recordAuditEvent({
+      actionKey: 'auth.login',
+      entityType: 'user',
+      entityId: String(user.id),
+      userId: user.id,
+      ipAddress: request.ip,
+    });
+
     return { id: user.id, username: user.username };
   });
 
   app.post('/auth/logout', { config: { public: true } }, async (request, reply) => {
+    const userId = request.session.userId;
     await request.session.destroy();
     reply.code(204);
+    await recordAuditEvent({
+      actionKey: 'auth.logout',
+      entityType: 'user',
+      entityId: typeof userId === 'number' ? String(userId) : undefined,
+      userId,
+      ipAddress: request.ip,
+    });
     return null;
   });
 }
