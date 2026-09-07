@@ -1,0 +1,21 @@
+{
+  "name": "bistro",
+  "private": true,
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.1.3",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "e2e": "turbo run e2e",
+    "ci": "turbo run lint test build",
+    "seed": "turbo run seed --filter=@bistro/db"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0"
+  }
+}

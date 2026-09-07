@@ -2,6 +2,9 @@
 node_modules/
 .pnpm-store/
 
+# Claude Code local state
+.claude/
+
 # Env / secrets
 .env
 .env.*
