@@ -5,6 +5,7 @@ import { catalogRoutes } from './modules/catalog/catalog.routes.js';
 import { floorRoutes } from './modules/floor/floor.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { modifiersRoutes } from './modules/modifiers/modifiers.routes.js';
+import { ordersRoutes } from './modules/orders/orders.routes.js';
 import { rbacRoutes } from './modules/rbac/rbac.routes.js';
 import csrfPlugin from './plugins/csrf.js';
 import guardPlugin from './plugins/guard.js';
@@ -32,6 +33,7 @@ export function buildApp(): FastifyInstance {
   app.register(catalogRoutes);
   app.register(modifiersRoutes);
   app.register(floorRoutes);
+  app.register(ordersRoutes);
   app.register(healthRoutes);
 
   return app;

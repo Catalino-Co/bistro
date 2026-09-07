@@ -29,6 +29,10 @@ export const PERMISSIONS = [
     key: 'floor.manage',
     description: 'Create/edit dine areas and tables for the current branch',
   },
+  {
+    key: 'orders.manage',
+    description: 'Open and close orders on a table for the current branch',
+  },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]['key'];

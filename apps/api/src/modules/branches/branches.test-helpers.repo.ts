@@ -32,6 +32,9 @@ export async function deleteBranchFixture(fixture: BranchFixture): Promise<void>
   await db.delete(schema.sessions).where(eq(schema.sessions.branchId, fixture.branchId));
   await db.delete(schema.auditLog).where(eq(schema.auditLog.branchId, fixture.branchId));
   await db.delete(schema.userRoles).where(eq(schema.userRoles.branchId, fixture.branchId));
+  // orders.dine_table_id references dining_tables, so this must run before
+  // the dine area/table sweep below deletes the tables an order points to.
+  await db.delete(schema.orders).where(eq(schema.orders.branchId, fixture.branchId));
 
   // Safety net for a test that failed partway through its own cleanup of
   // dine areas/tables it created under this branch.
