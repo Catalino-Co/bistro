@@ -3,6 +3,19 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  server: {
+    // Keeps the browser talking to a single origin so the API's
+    // httpOnly session cookie works without CORS/cross-site cookie
+    // configuration. Production needs the equivalent at the reverse
+    // proxy (out of scope for now).
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
+  },
   plugins: [
     sveltekit({
       compilerOptions: {
