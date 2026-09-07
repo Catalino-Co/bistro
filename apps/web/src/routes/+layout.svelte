@@ -42,6 +42,7 @@
 			{/if}
 			<a href="/">Inicio</a>
 			<a href="/admin/catalog">Catálogo</a>
+			<a href="/admin/modifiers">Modificadores</a>
 			<a href="/admin/roles">Roles y permisos</a>
 			<button onclick={handleLogout}>Cerrar sesión</button>
 		</header>

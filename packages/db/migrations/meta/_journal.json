@@ -43,6 +43,13 @@
       "when": 1788813075760,
       "tag": "0005_good_wind_dancer",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788813578190,
+      "tag": "0006_third_lady_mastermind",
+      "breakpoints": true
     }
   ]
 }

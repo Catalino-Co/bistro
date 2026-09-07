@@ -25,16 +25,25 @@
 		id: number;
 		name: string;
 	}
+	interface ModifierGroup {
+		id: number;
+		name: string;
+		selectionType: 'single' | 'multiple';
+	}
 
 	let categories = $state<Category[]>([]);
 	let families = $state<Family[]>([]);
 	let subfamilies = $state<Subfamily[]>([]);
 	let items = $state<Item[]>([]);
 	let taxRates = $state<TaxRate[]>([]);
+	let allModifierGroups = $state<ModifierGroup[]>([]);
+	let itemModifierGroups = $state<ModifierGroup[]>([]);
 
 	let selectedCategoryId = $state<number | null>(null);
 	let selectedFamilyId = $state<number | null>(null);
 	let selectedSubfamilyId = $state<number | null>(null);
+	let selectedItemId = $state<number | null>(null);
+	let modifierGroupToAssociate = $state<number | null>(null);
 
 	let newCategoryName = $state('');
 	let newFamilyName = $state('');
@@ -78,6 +87,39 @@
 		const response = await apiFetch(`/catalog/items?subfamilyId=${subfamilyId}`);
 		if (response.ok) {
 			items = ((await response.json()) as { items: Item[] }).items;
+		}
+	}
+
+	async function loadAllModifierGroups() {
+		const response = await apiFetch('/modifiers/groups');
+		if (response.ok) {
+			allModifierGroups = ((await response.json()) as { groups: ModifierGroup[] }).groups;
+			if (modifierGroupToAssociate === null && allModifierGroups.length > 0) {
+				modifierGroupToAssociate = allModifierGroups[0]!.id;
+			}
+		}
+	}
+
+	async function loadItemModifierGroups(itemId: number) {
+		const response = await apiFetch(`/catalog/items/${itemId}/modifier-groups`);
+		if (response.ok) {
+			itemModifierGroups = ((await response.json()) as { groups: ModifierGroup[] }).groups;
+		}
+	}
+
+	function selectItem(id: number) {
+		selectedItemId = id;
+		loadItemModifierGroups(id);
+	}
+
+	async function associateModifierGroup() {
+		if (selectedItemId === null || modifierGroupToAssociate === null) return;
+		const response = await apiFetch('/catalog/items/modifier-groups', {
+			method: 'POST',
+			body: JSON.stringify({ itemId: selectedItemId, modifierGroupId: modifierGroupToAssociate }),
+		});
+		if (response.ok) {
+			await loadItemModifierGroups(selectedItemId);
 		}
 	}
 
@@ -169,6 +211,7 @@
 	$effect(() => {
 		loadCategories();
 		loadTaxRates();
+		loadAllModifierGroups();
 	});
 </script>
 
@@ -229,7 +272,9 @@
 			<h2>Ítems</h2>
 			<ul>
 				{#each items as item (item.id)}
-					<li>{item.name} — RD$ {item.price}</li>
+					<li>
+						<button onclick={() => selectItem(item.id)}>{item.name} — RD$ {item.price}</button>
+					</li>
 				{/each}
 			</ul>
 			<form onsubmit={createItem}>
@@ -242,6 +287,27 @@
 				</select>
 				<button type="submit">Crear</button>
 			</form>
+		</section>
+	{/if}
+
+	{#if selectedItemId !== null}
+		<section>
+			<h2>Grupos de modificadores del ítem</h2>
+			<ul>
+				{#each itemModifierGroups as group (group.id)}
+					<li>{group.name} ({group.selectionType})</li>
+				{/each}
+			</ul>
+			{#if allModifierGroups.length > 0}
+				<select bind:value={modifierGroupToAssociate}>
+					{#each allModifierGroups as group (group.id)}
+						<option value={group.id}>{group.name}</option>
+					{/each}
+				</select>
+				<button onclick={associateModifierGroup}>Asociar</button>
+			{:else}
+				<p>No hay grupos de modificadores. Créalos en la pantalla de Modificadores.</p>
+			{/if}
 		</section>
 	{/if}
 </main>
