@@ -97,6 +97,9 @@ importers:
       '@bistro/config':
         specifier: workspace:*
         version: link:../config
+      '@bistro/permissions':
+        specifier: workspace:*
+        version: link:../permissions
       '@types/pg':
         specifier: ^8.11.10
         version: 8.23.1
@@ -112,6 +115,21 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.23.13
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.4
+        version: 2.1.9(@types/node@22.20.1)(lightningcss@1.33.0)
+
+  packages/permissions:
+    devDependencies:
+      '@bistro/config':
+        specifier: workspace:*
+        version: link:../config
+      eslint:
+        specifier: ^9.14.0
+        version: 9.39.5
       typescript:
         specifier: ^5.6.3
         version: 5.9.3

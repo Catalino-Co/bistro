@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@bistro/config": "workspace:*",
+    "@bistro/permissions": "workspace:*",
     "@types/pg": "^8.11.10",
     "dotenv-cli": "^7.4.4",
     "drizzle-kit": "^0.28.1",
