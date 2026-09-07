@@ -15,6 +15,7 @@ dist/
 build/
 .svelte-kit/
 .turbo/
+*.tsbuildinfo
 
 # Logs
 *.log

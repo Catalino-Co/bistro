@@ -1,11 +1,16 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import { authRoutes } from './modules/auth/auth.routes.js';
+import sessionPlugin from './plugins/session.js';
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({
     logger: true,
   });
 
-  app.get('/health', async () => ({ status: 'ok' }));
+  app.register(sessionPlugin);
+  app.register(authRoutes);
+
+  app.get('/health', { config: { public: true } }, async () => ({ status: 'ok' }));
 
   return app;
 }

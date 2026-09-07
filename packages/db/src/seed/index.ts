@@ -1,8 +1,8 @@
-import { pool } from '../client';
-import { seedCustomerTypes } from './customer-types';
-import { seedPermissions } from './permissions';
-import { seedAdminRole } from './roles';
-import { seedTaxRates } from './tax-rates';
+import { pool } from '../client.js';
+import { seedCustomerTypes } from './customer-types.js';
+import { seedPermissions } from './permissions.js';
+import { seedAdminRole } from './roles.js';
+import { seedTaxRates } from './tax-rates.js';
 
 async function main() {
   await seedPermissions();

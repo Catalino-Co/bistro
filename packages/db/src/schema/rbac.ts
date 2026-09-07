@@ -1,6 +1,6 @@
 import { bigint, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { bistro } from './_shared';
+import { bistro } from './_shared.js';
 
 export const roles = bistro.table('roles', {
   id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),

@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { db } from '../client';
-import { customerTypes } from '../schema';
+import { db } from '../client.js';
+import { customerTypes } from '../schema/index.js';
 
 // Mirrors the legacy's 4 customer types (cus_cut_id), but allowsRoomService
 // is now a real column instead of an `if` scattered through the POS --

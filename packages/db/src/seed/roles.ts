@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { db } from '../client';
-import { permissions, rolePermissions, roles } from '../schema';
+import { db } from '../client.js';
+import { permissions, rolePermissions, roles } from '../schema/index.js';
 
 // Seeds a single "admin" role holding every seeded permission. Additional
 // roles (manager, cashier, waiter, kitchen, ...) get created through the

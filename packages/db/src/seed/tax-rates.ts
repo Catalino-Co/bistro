@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { db } from '../client';
-import { taxRates } from '../schema';
+import { db } from '../client.js';
+import { taxRates } from '../schema/index.js';
 
 // The legacy system hardcoded 18% ITBIS in ~4 different files. Seeding the
 // real Dominican rates here means the POS reads tax_rates instead.

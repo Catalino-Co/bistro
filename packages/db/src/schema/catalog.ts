@@ -1,5 +1,5 @@
 import { boolean, numeric, text, timestamp, bigint } from 'drizzle-orm/pg-core';
-import { bistro, statusEnum } from './_shared';
+import { bistro, statusEnum } from './_shared.js';
 
 // Read everywhere tax needs to be computed instead of the legacy's 18%
 // hardcoded in half a dozen files. `rate` is a fraction (0.1800 = 18%).

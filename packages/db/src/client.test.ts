@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
-import { db, pool } from './client';
-import { companies } from './schema/org';
+import { db, pool } from './client.js';
+import { companies } from './schema/org.js';
 
 describe('db client', () => {
   afterAll(async () => {

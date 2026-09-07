@@ -1,13 +1,7 @@
 {
   "extends": "@bistro/config/tsconfig.base.json",
   "compilerOptions": {
-    // Override the shared Node/NodeNext base: drizzle-kit's config/schema
-    // loader bundles with esbuild and doesn't handle NodeNext's requirement
-    // for explicit ".js" extensions on relative imports pointing at .ts
-    // source, so this package (and tsx, which also tolerates it) uses
-    // bundler-style extensionless resolution instead.
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "composite": true,
     "outDir": "dist",
     "rootDir": "src",
     "declaration": true,
