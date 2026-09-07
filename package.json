@@ -13,9 +13,12 @@
     "test": "turbo run test",
     "e2e": "turbo run e2e",
     "ci": "turbo run lint test build",
-    "seed": "turbo run seed --filter=@bistro/db"
+    "seed": "turbo run seed --filter=@bistro/db",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "prettier": "^3.3.3",
     "turbo": "^2.3.0"
   }
 }
