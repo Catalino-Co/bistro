@@ -5,6 +5,7 @@ import {
   createTestUser,
   deleteTestUser,
 } from '../modules/auth/test-helpers.repo.js';
+import { cookieValue, findCookiePair, mergeCookies } from '../test-support/http.js';
 import {
   createBranchFixture,
   deleteBranchFixture,
@@ -14,14 +15,6 @@ import {
 
 const USERNAME = '__guard_test_user__';
 const PASSWORD = 'CorrectHorseBatteryStaple1!';
-
-function extractCookie(setCookieHeader: string | string[] | undefined): string {
-  const raw = Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader;
-  if (!raw) {
-    throw new Error('Expected a set-cookie header');
-  }
-  return raw.split(';')[0]!;
-}
 
 describe('guard plugin', () => {
   const app = buildApp();
@@ -52,12 +45,20 @@ describe('guard plugin', () => {
   });
 
   async function loginCookie(): Promise<string> {
-    const response = await app.inject({
+    const primed = await app.inject({ method: 'GET', url: '/health' });
+    const csrfCookie = findCookiePair(primed.headers['set-cookie'], 'csrf');
+    const sessionCookie = findCookiePair(primed.headers['set-cookie'], 'sessionId');
+
+    const login = await app.inject({
       method: 'POST',
       url: '/auth/login',
+      headers: {
+        cookie: mergeCookies(sessionCookie, csrfCookie),
+        'x-csrf-token': cookieValue(csrfCookie),
+      },
       payload: { username: USERNAME, password: PASSWORD },
     });
-    return extractCookie(response.headers['set-cookie']);
+    return findCookiePair(login.headers['set-cookie'], 'sessionId');
   }
 
   it('denies a route that declares neither public nor permissions', async () => {

@@ -1,16 +1,21 @@
+import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
+import { cookieValue, findCookiePair, mergeCookies } from '../../test-support/http.js';
 import { closeTestDbPool, createTestUser, deleteTestUser } from './test-helpers.repo.js';
 
 const TEST_USERNAME = '__auth_test_user__';
 const TEST_PASSWORD = 'CorrectHorseBatteryStaple1!';
 
-function extractCookie(setCookieHeader: string | string[] | undefined): string {
-  const raw = Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader;
-  if (!raw) {
-    throw new Error('Expected a set-cookie header');
-  }
-  return raw.split(';')[0]!;
+async function primeCsrf(app: FastifyInstance) {
+  const response = await app.inject({ method: 'GET', url: '/health' });
+  const sessionCookie = findCookiePair(response.headers['set-cookie'], 'sessionId');
+  const csrfCookie = findCookiePair(response.headers['set-cookie'], 'csrf');
+  return {
+    sessionCookie,
+    cookie: mergeCookies(sessionCookie, csrfCookie),
+    csrfToken: cookieValue(csrfCookie),
+  };
 }
 
 describe('auth routes', () => {
@@ -26,10 +31,22 @@ describe('auth routes', () => {
     await closeTestDbPool();
   });
 
-  it('rejects an incorrect password without changing the caller into an authenticated session', async () => {
+  it('rejects a login POST without a CSRF token even with valid credentials', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/auth/login',
+      payload: { username: TEST_USERNAME, password: TEST_PASSWORD },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('rejects an incorrect password without changing the caller into an authenticated session', async () => {
+    const { cookie, csrfToken } = await primeCsrf(app);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      headers: { cookie, 'x-csrf-token': csrfToken },
       payload: { username: TEST_USERNAME, password: 'wrong-password' },
     });
 
@@ -37,37 +54,41 @@ describe('auth routes', () => {
   });
 
   it('regenerates the session id on successful login and sets an httpOnly cookie', async () => {
-    const anonymous = await app.inject({ method: 'GET', url: '/health' });
-    const anonymousCookie = extractCookie(anonymous.headers['set-cookie']);
+    const { sessionCookie: anonymousSessionCookie, cookie, csrfToken } = await primeCsrf(app);
 
     const login = await app.inject({
       method: 'POST',
       url: '/auth/login',
-      headers: { cookie: anonymousCookie },
+      headers: { cookie, 'x-csrf-token': csrfToken },
       payload: { username: TEST_USERNAME, password: TEST_PASSWORD },
     });
 
     expect(login.statusCode).toBe(200);
     const rawSetCookie = login.headers['set-cookie'];
-    const setCookie = Array.isArray(rawSetCookie) ? rawSetCookie[0] : rawSetCookie;
-    expect(setCookie).toContain('HttpOnly');
+    const setCookieList = Array.isArray(rawSetCookie) ? rawSetCookie : [rawSetCookie];
+    expect(setCookieList.find((c) => c?.startsWith('sessionId='))).toContain('HttpOnly');
 
-    const loggedInCookie = extractCookie(rawSetCookie);
-    expect(loggedInCookie).not.toBe(anonymousCookie);
+    const loggedInSessionCookie = findCookiePair(rawSetCookie, 'sessionId');
+    expect(loggedInSessionCookie).not.toBe(anonymousSessionCookie);
   });
 
   it('destroys the session on logout', async () => {
+    const { cookie, csrfToken } = await primeCsrf(app);
     const login = await app.inject({
       method: 'POST',
       url: '/auth/login',
+      headers: { cookie, 'x-csrf-token': csrfToken },
       payload: { username: TEST_USERNAME, password: TEST_PASSWORD },
     });
-    const cookie = extractCookie(login.headers['set-cookie']);
+    const sessionCookie = findCookiePair(login.headers['set-cookie'], 'sessionId');
 
     const logout = await app.inject({
       method: 'POST',
       url: '/auth/logout',
-      headers: { cookie },
+      headers: {
+        cookie: mergeCookies(sessionCookie, `csrf=${csrfToken}`),
+        'x-csrf-token': csrfToken,
+      },
     });
 
     expect(logout.statusCode).toBe(204);
