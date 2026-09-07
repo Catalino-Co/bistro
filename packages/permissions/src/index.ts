@@ -25,6 +25,10 @@ export const PERMISSIONS = [
     key: 'catalog.manage',
     description: 'Create/edit categories, families, subfamilies, and items',
   },
+  {
+    key: 'floor.manage',
+    description: 'Create/edit dine areas and tables for the current branch',
+  },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]['key'];

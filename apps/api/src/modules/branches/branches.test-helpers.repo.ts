@@ -1,5 +1,5 @@
 import { db, schema } from '@bistro/db';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 export interface BranchFixture {
   branchId: number;
@@ -32,6 +32,20 @@ export async function deleteBranchFixture(fixture: BranchFixture): Promise<void>
   await db.delete(schema.sessions).where(eq(schema.sessions.branchId, fixture.branchId));
   await db.delete(schema.auditLog).where(eq(schema.auditLog.branchId, fixture.branchId));
   await db.delete(schema.userRoles).where(eq(schema.userRoles.branchId, fixture.branchId));
+
+  // Safety net for a test that failed partway through its own cleanup of
+  // dine areas/tables it created under this branch.
+  const areaIds = (
+    await db
+      .select({ id: schema.dineAreas.id })
+      .from(schema.dineAreas)
+      .where(eq(schema.dineAreas.branchId, fixture.branchId))
+  ).map((r) => r.id);
+  if (areaIds.length > 0) {
+    await db.delete(schema.dineTables).where(inArray(schema.dineTables.dineAreaId, areaIds));
+    await db.delete(schema.dineAreas).where(inArray(schema.dineAreas.id, areaIds));
+  }
+
   await db.delete(schema.branches).where(eq(schema.branches.id, fixture.branchId));
   await db.delete(schema.businessUnits).where(eq(schema.businessUnits.id, fixture.businessUnitId));
   await db.delete(schema.companies).where(eq(schema.companies.id, fixture.companyId));

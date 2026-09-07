@@ -7,3 +7,4 @@ export * from './auth.js';
 export * from './audit.js';
 export * from './menu.js';
 export * from './modifiers.js';
+export * from './floor.js';

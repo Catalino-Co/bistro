@@ -50,6 +50,13 @@
       "when": 1788813578190,
       "tag": "0006_third_lady_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788814165954,
+      "tag": "0007_ordinary_black_cat",
+      "breakpoints": true
     }
   ]
 }

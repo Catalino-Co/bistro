@@ -41,6 +41,7 @@
 				<span> · {session.currentBranch.name}</span>
 			{/if}
 			<a href="/">Inicio</a>
+			<a href="/admin/floor">Mesas y áreas</a>
 			<a href="/admin/catalog">Catálogo</a>
 			<a href="/admin/modifiers">Modificadores</a>
 			<a href="/admin/roles">Roles y permisos</a>
