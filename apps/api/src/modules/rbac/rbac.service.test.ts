@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { findAuditEvents } from '../audit/audit.repo.js';
 import { closeTestDbPool, createTestUser, deleteTestUser } from '../auth/test-helpers.repo.js';
-import { grantPermissionToRole, revokePermissionFromRole } from './rbac.service.js';
 import { roleHasPermission } from './rbac.repo.js';
+import { grantPermissionToRole, revokePermissionFromRole } from './rbac.service.js';
 import {
   createTestPermission,
   createTestRole,

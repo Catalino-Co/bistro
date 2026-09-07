@@ -20,8 +20,12 @@ export async function createTestPermission(key: string): Promise<number> {
   return row.id;
 }
 
+// Scoped to exactly these ids (not a wildcard sweep) -- see
+// test-helpers.repo.ts's deleteTestUser for why that matters when other
+// test files' suites are running concurrently.
 export async function deleteTestRole(roleId: number): Promise<void> {
   await db.delete(schema.rolePermissions).where(eq(schema.rolePermissions.roleId, roleId));
+  await db.delete(schema.userRoles).where(eq(schema.userRoles.roleId, roleId));
   await db.delete(schema.roles).where(eq(schema.roles.id, roleId));
 }
 

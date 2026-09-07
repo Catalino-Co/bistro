@@ -15,8 +15,10 @@ describe('login lockout', () => {
   const app = buildApp();
 
   beforeAll(async () => {
-    // Login attempts persist across test runs against the real dev DB, so a
-    // stale lockout from a previous run must not leak into this one.
+    // Login attempts persist across runs against the real dev DB, so a
+    // stale lockout from a previous run of *this* file must not leak into
+    // this one. Scoped to this exact username -- safe alongside other test
+    // files' suites running concurrently.
     await deleteLoginAttempts(USERNAME);
     await createTestUser(USERNAME, PASSWORD);
   });

@@ -39,6 +39,9 @@ export async function grantAdminRole(userId: number, branchId: number): Promise<
   await db.insert(schema.userRoles).values({ userId, roleId: adminRole.id, branchId });
 }
 
+// Scoped to exactly these ids (not a wildcard sweep) so it's safe to run
+// concurrently with other test files' suites -- see test-helpers.repo.ts's
+// deleteTestUser for the same reasoning.
 export async function deleteBranchFixture(fixture: GuardFixture): Promise<void> {
   await db.delete(schema.userRoles).where(eq(schema.userRoles.branchId, fixture.branchId));
   await db.delete(schema.branches).where(eq(schema.branches.id, fixture.branchId));

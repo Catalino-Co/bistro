@@ -15,6 +15,11 @@ export async function createTestUser(username: string, password: string): Promis
   return row.id;
 }
 
+// Scoped to exactly this username (not a wildcard sweep) so it's safe to
+// run from a single test file's afterAll while other files' suites are
+// still running concurrently -- see test-support/cleanup.repo.ts for the
+// broader, run-level sweep, which is only safe as a one-time global-setup
+// step precisely because it isn't scoped like this.
 export async function deleteTestUser(username: string): Promise<void> {
   const [user] = await db
     .select({ id: schema.users.id })
@@ -30,6 +35,7 @@ export async function deleteTestUser(username: string): Promise<void> {
   // rbac changes) would otherwise block this delete.
   await db.delete(schema.sessions).where(eq(schema.sessions.userId, user.id));
   await db.delete(schema.auditLog).where(eq(schema.auditLog.userId, user.id));
+  await db.delete(schema.userRoles).where(eq(schema.userRoles.userId, user.id));
   await db.delete(schema.users).where(eq(schema.users.id, user.id));
 }
 
