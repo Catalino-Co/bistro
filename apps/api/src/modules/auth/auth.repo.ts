@@ -24,6 +24,25 @@ export async function findUserByUsername(username: string): Promise<UserRow | nu
   return row ?? null;
 }
 
+export interface PublicUser {
+  id: number;
+  username: string;
+  fullName: string;
+}
+
+export async function findPublicUserById(userId: number): Promise<PublicUser | null> {
+  const [row] = await db
+    .select({
+      id: schema.users.id,
+      username: schema.users.username,
+      fullName: schema.users.fullName,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId));
+
+  return row ?? null;
+}
+
 export async function countRecentFailedLoginAttempts(
   username: string,
   sinceMinutesAgo: number,

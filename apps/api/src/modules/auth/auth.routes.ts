@@ -1,9 +1,31 @@
 import type { FastifyInstance } from 'fastify';
 import { recordAuditEvent } from '../audit/audit.repo.js';
+import { findPublicUserById } from './auth.repo.js';
 import { loginBodySchema } from './auth.schema.js';
 import { verifyCredentials } from './auth.service.js';
 
 export async function authRoutes(app: FastifyInstance) {
+  app.get('/auth/me', { config: { permissions: [] } }, async (request, reply) => {
+    const userId = request.session.userId;
+    if (typeof userId !== 'number') {
+      reply.code(401);
+      return { error: 'unauthenticated' };
+    }
+
+    const user = await findPublicUserById(userId);
+    if (!user) {
+      reply.code(401);
+      return { error: 'unauthenticated' };
+    }
+
+    return {
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      branchId: request.session.branchId ?? null,
+    };
+  });
+
   app.post('/auth/login', { config: { public: true } }, async (request, reply) => {
     const parsed = loginBodySchema.safeParse(request.body);
     if (!parsed.success) {
