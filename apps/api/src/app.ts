@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { branchesRoutes } from './modules/branches/branches.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
+import { rbacRoutes } from './modules/rbac/rbac.routes.js';
 import csrfPlugin from './plugins/csrf.js';
 import guardPlugin from './plugins/guard.js';
 import rateLimitPlugin from './plugins/rate-limit.js';
@@ -24,6 +25,7 @@ export function buildApp(): FastifyInstance {
   app.register(guardPlugin);
   app.register(authRoutes);
   app.register(branchesRoutes);
+  app.register(rbacRoutes);
   app.register(healthRoutes);
 
   return app;

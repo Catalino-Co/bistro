@@ -40,6 +40,8 @@
 			{#if session.currentBranch}
 				<span> · {session.currentBranch.name}</span>
 			{/if}
+			<a href="/">Inicio</a>
+			<a href="/admin/roles">Roles y permisos</a>
 			<button onclick={handleLogout}>Cerrar sesión</button>
 		</header>
 	{/if}

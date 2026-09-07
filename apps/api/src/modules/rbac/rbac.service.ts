@@ -1,5 +1,23 @@
 import { recordAuditEvent } from '../audit/audit.repo.js';
-import { deleteRolePermission, insertRolePermission, roleHasPermission } from './rbac.repo.js';
+import {
+  createRole as createRoleRow,
+  deleteRolePermission,
+  insertRolePermission,
+  roleHasPermission,
+  type RoleRow,
+} from './rbac.repo.js';
+
+export async function createRole(name: string, actorUserId: number): Promise<RoleRow> {
+  const role = await createRoleRow(name);
+  await recordAuditEvent({
+    actionKey: 'rbac.role_created',
+    entityType: 'role',
+    entityId: String(role.id),
+    afterData: { name },
+    userId: actorUserId,
+  });
+  return role;
+}
 
 // The service layer B1-2's RBAC UI will call directly -- permission
 // changes are exactly the kind of action the legacy left unaudited
