@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import { auditRoutes } from './modules/audit/audit.routes.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { branchesRoutes } from './modules/branches/branches.routes.js';
 import { catalogRoutes } from './modules/catalog/catalog.routes.js';
@@ -46,6 +47,7 @@ export function buildApp(): FastifyInstance {
   app.register(paymentsRoutes);
   app.register(kitchenRoutes);
   app.register(reportsRoutes);
+  app.register(auditRoutes);
   app.register(healthRoutes);
 
   return app;

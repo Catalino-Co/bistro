@@ -34,6 +34,10 @@ export const PERMISSIONS = [
     description: 'Open and close orders on a table for the current branch',
   },
   {
+    key: 'audit.view',
+    description: 'Read the audit trail: who did what, when, and from where',
+  },
+  {
     key: 'reports.view',
     description:
       "See the branch's sales figures: daily totals, average ticket, tips, sales by category and station",

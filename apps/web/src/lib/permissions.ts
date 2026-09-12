@@ -36,6 +36,17 @@ export const PERMISSION_COPY: Record<string, PermissionCopy> = {
     group: 'Sistema',
     pending: 'Fase 4',
   },
+  'audit.view': {
+    label: 'Auditoría',
+    description: 'Leer la bitácora: quién hizo qué, cuándo y desde dónde.',
+    group: 'Sistema',
+  },
+  'reports.view': {
+    label: 'Reportes',
+    description:
+      'Ver las cifras de venta de la sucursal: totales del día, ticket promedio, propinas.',
+    group: 'Administración',
+  },
   'catalog.manage': {
     label: 'Catálogo',
     description: 'Crear y editar categorías, familias, subfamilias e ítems.',

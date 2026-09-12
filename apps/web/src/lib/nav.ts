@@ -57,7 +57,7 @@ export const SETTINGS_ITEMS: NavItem[] = [
   { href: '/settings/taxes', label: 'Impuestos', icon: 'catalog', pending: 'Fase 4' },
   { href: '/settings/users', label: 'Usuarios', icon: 'user' },
   { href: '/settings/roles', label: 'Roles y permisos', icon: 'roles' },
-  { href: '/settings/audit', label: 'Auditoría', icon: 'lock', pending: 'Fase 4' },
+  { href: '/settings/audit', label: 'Auditoría', icon: 'lock' },
 ];
 
 /** `/` solo coincide exacto; el resto también con sus rutas hijas. */
