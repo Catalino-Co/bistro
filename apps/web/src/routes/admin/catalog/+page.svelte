@@ -34,6 +34,8 @@
 	interface KitchenStation {
 		id: number;
 		name: string;
+		printerHost: string | null;
+		printerPort: number | null;
 	}
 
 	let categories = $state<Category[]>([]);
@@ -59,6 +61,11 @@
 	let newItemTaxRateId = $state<number | null>(null);
 	let newItemStationId = $state<number | null>(null);
 	let newStationName = $state('');
+	let newStationHost = $state('');
+	let newStationPort = $state('');
+	let editingPrinterStationId = $state<number | null>(null);
+	let editingPrinterHost = $state('');
+	let editingPrinterPort = $state('');
 
 	async function loadCategories() {
 		const response = await apiFetch('/catalog/categories');
@@ -111,12 +118,46 @@
 		if (!newStationName.trim()) return;
 		const response = await apiFetch('/catalog/kitchen-stations', {
 			method: 'POST',
-			body: JSON.stringify({ name: newStationName.trim() }),
+			body: JSON.stringify({
+				name: newStationName.trim(),
+				printerHost: newStationHost.trim() || undefined,
+				printerPort: newStationPort.trim() ? Number(newStationPort.trim()) : undefined,
+			}),
 		});
 		if (response.ok) {
 			newStationName = '';
+			newStationHost = '';
+			newStationPort = '';
 			await loadKitchenStations();
 		}
+	}
+
+	function startEditPrinter(station: KitchenStation) {
+		editingPrinterStationId = station.id;
+		editingPrinterHost = station.printerHost ?? '';
+		editingPrinterPort = station.printerPort === null ? '' : String(station.printerPort);
+	}
+
+	async function savePrinter(stationId: number) {
+		const host = editingPrinterHost.trim();
+		const port = editingPrinterPort.trim();
+		await apiFetch(`/catalog/kitchen-stations/${stationId}/printer`, {
+			method: 'PATCH',
+			body: JSON.stringify({
+				printerHost: host || null,
+				printerPort: port ? Number(port) : null,
+			}),
+		});
+		editingPrinterStationId = null;
+		await loadKitchenStations();
+	}
+
+	async function clearPrinter(stationId: number) {
+		await apiFetch(`/catalog/kitchen-stations/${stationId}/printer`, {
+			method: 'PATCH',
+			body: JSON.stringify({ printerHost: null, printerPort: null }),
+		});
+		await loadKitchenStations();
 	}
 
 	function stationName(stationId: number | null): string {
@@ -358,11 +399,35 @@
 		<h2>Estaciones de cocina</h2>
 		<ul>
 			{#each kitchenStations as station (station.id)}
-				<li>{station.name}</li>
+				<li>
+					{station.name}
+					{#if editingPrinterStationId === station.id}
+						<input type="text" bind:value={editingPrinterHost} placeholder="IP de la impresora" />
+						<input type="text" bind:value={editingPrinterPort} placeholder="Puerto" />
+						<button type="button" onclick={() => savePrinter(station.id)}>Guardar</button>
+						<button type="button" onclick={() => (editingPrinterStationId = null)}
+							>Cancelar</button
+						>
+					{:else}
+						<span>
+							{#if station.printerHost}
+								— impresora {station.printerHost}:{station.printerPort}
+							{:else}
+								— sin impresora configurada
+							{/if}
+						</span>
+						<button type="button" onclick={() => startEditPrinter(station)}>Editar impresora</button>
+						{#if station.printerHost}
+							<button type="button" onclick={() => clearPrinter(station.id)}>Quitar</button>
+						{/if}
+					{/if}
+				</li>
 			{/each}
 		</ul>
 		<form onsubmit={createKitchenStation}>
 			<input type="text" bind:value={newStationName} placeholder="Nueva estación" required />
+			<input type="text" bind:value={newStationHost} placeholder="IP de la impresora (opcional)" />
+			<input type="text" bind:value={newStationPort} placeholder="Puerto (ej. 9100)" />
 			<button type="submit">Crear</button>
 		</form>
 	</section>

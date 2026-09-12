@@ -138,6 +138,13 @@
 		kitchenError = '';
 		const response = await apiFetch(`/orders/${orderId}/send-to-kitchen`, { method: 'POST' });
 		if (response.ok) {
+			const body = (await response.json()) as {
+				printResults: { stationName: string; outcome: string; error?: string }[];
+			};
+			const failed = body.printResults.filter((p) => p.outcome === 'print_failed');
+			if (failed.length > 0) {
+				kitchenError = `No se pudo imprimir en: ${failed.map((f) => f.stationName).join(', ')} (revisa la impresora; las líneas ya quedaron marcadas y visibles en el tablero de cocina)`;
+			}
 			await refresh();
 		} else {
 			const body = (await response.json()) as { error: string };

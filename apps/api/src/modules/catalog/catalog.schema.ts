@@ -25,3 +25,24 @@ export const itemBodySchema = z.object({
 export const itemStationBodySchema = z.object({
   stationId: z.number().int().positive().nullable(),
 });
+
+export const kitchenStationBodySchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    printerHost: z.string().min(1).max(255).optional(),
+    printerPort: z.number().int().positive().max(65535).optional(),
+  })
+  // Both or neither -- a host with no port (or vice versa) isn't a printer
+  // we could ever actually connect to.
+  .refine((data) => (data.printerHost === undefined) === (data.printerPort === undefined), {
+    message: 'printerHost and printerPort must be provided together',
+  });
+
+export const kitchenStationPrinterBodySchema = z
+  .object({
+    printerHost: z.string().min(1).max(255).nullable(),
+    printerPort: z.number().int().positive().max(65535).nullable(),
+  })
+  .refine((data) => (data.printerHost === null) === (data.printerPort === null), {
+    message: 'printerHost and printerPort must be set or cleared together',
+  });

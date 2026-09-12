@@ -132,6 +132,8 @@ export async function updateItemStation(itemId: number, stationId: number | null
 export interface KitchenStationRow {
   id: number;
   name: string;
+  printerHost: string | null;
+  printerPort: number | null;
   status: 'active' | 'inactive';
 }
 
@@ -140,13 +142,37 @@ export async function listKitchenStations(): Promise<KitchenStationRow[]> {
     .select({
       id: schema.kitchenStations.id,
       name: schema.kitchenStations.name,
+      printerHost: schema.kitchenStations.printerHost,
+      printerPort: schema.kitchenStations.printerPort,
       status: schema.kitchenStations.status,
     })
     .from(schema.kitchenStations);
 }
 
-export async function createKitchenStation(name: string): Promise<KitchenStationRow> {
-  const [row] = await db.insert(schema.kitchenStations).values({ name }).returning();
+export async function createKitchenStation(
+  name: string,
+  printerHost?: string,
+  printerPort?: number,
+): Promise<KitchenStationRow> {
+  const [row] = await db
+    .insert(schema.kitchenStations)
+    .values({
+      name,
+      printerHost: printerHost ?? null,
+      printerPort: printerPort ?? null,
+    })
+    .returning();
   if (!row) throw new Error('Failed to create kitchen station');
   return row;
+}
+
+export async function updateKitchenStationPrinter(
+  id: number,
+  printerHost: string | null,
+  printerPort: number | null,
+): Promise<void> {
+  await db
+    .update(schema.kitchenStations)
+    .set({ printerHost, printerPort })
+    .where(eq(schema.kitchenStations.id, id));
 }

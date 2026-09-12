@@ -1,6 +1,7 @@
 import { db, schema } from '@bistro/db';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { recordAuditEvent } from '../audit/audit.repo.js';
+import { printStationTickets, type PrintStationResult } from '../kitchen/kitchen.repo.js';
 import { sumPaymentsAmount } from '../payments/payments.repo.js';
 import { computeOrderTotals } from './order-totals.repo.js';
 
@@ -644,11 +645,15 @@ export async function getOrderTotals(
 export interface SentLineRow {
   id: number;
   itemId: number;
+  itemName: string;
+  quantity: number;
+  note: string | null;
   stationId: number | null;
+  stationName: string | null;
 }
 
 export type SendToKitchenResult =
-  | { outcome: 'sent'; lines: SentLineRow[] }
+  | { outcome: 'sent'; dineTableName: string; lines: SentLineRow[]; printResults: PrintStationResult[] }
   | { outcome: 'order_not_found' }
   | { outcome: 'order_closed' };
 
@@ -656,31 +661,42 @@ export type SendToKitchenResult =
 // not-yet-sent, non-voided line as sent to the kitchen in one go, so a
 // waiter can build up several lines and send them together as one
 // comanda. A line whose item has no station assigned still gets marked
-// sent -- it just won't surface on any station's ticket view.
+// sent -- it just won't surface on any station's ticket view, and won't
+// be included in what gets printed below.
 export async function sendToKitchen(
   branchId: number,
   orderId: number,
 ): Promise<SendToKitchenResult> {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [order] = await tx
-      .select({ status: schema.orders.status })
+      .select({ status: schema.orders.status, dineTableId: schema.orders.dineTableId })
       .from(schema.orders)
       .where(and(eq(schema.orders.id, orderId), eq(schema.orders.branchId, branchId)));
     if (!order) {
-      return { outcome: 'order_not_found' };
+      return { outcome: 'order_not_found' as const };
     }
     if (order.status === 'closed') {
-      return { outcome: 'order_closed' };
+      return { outcome: 'order_closed' as const };
     }
+
+    const [table] = await tx
+      .select({ name: schema.dineTables.name })
+      .from(schema.dineTables)
+      .where(eq(schema.dineTables.id, order.dineTableId));
 
     const pendingLines = await tx
       .select({
         id: schema.orderLines.id,
         itemId: schema.orderLines.itemId,
+        itemName: schema.items.name,
+        quantity: schema.orderLines.quantity,
+        note: schema.orderLines.note,
         stationId: schema.items.stationId,
+        stationName: schema.kitchenStations.name,
       })
       .from(schema.orderLines)
       .innerJoin(schema.items, eq(schema.items.id, schema.orderLines.itemId))
+      .leftJoin(schema.kitchenStations, eq(schema.kitchenStations.id, schema.items.stationId))
       .where(
         and(
           eq(schema.orderLines.orderId, orderId),
@@ -701,6 +717,35 @@ export async function sendToKitchen(
         );
     }
 
-    return { outcome: 'sent', lines: pendingLines };
+    return {
+      outcome: 'sent' as const,
+      dineTableName: table?.name ?? `Mesa #${order.dineTableId}`,
+      lines: pendingLines,
+    };
   });
+
+  if (result.outcome !== 'sent') {
+    return result;
+  }
+
+  // Printing happens after the transaction commits: a network round-trip
+  // to a physical printer (possibly slow, possibly unreachable) has no
+  // business holding a DB lock open while it happens.
+  const linesByStation = new Map<number, SentLineRow[]>();
+  for (const line of result.lines) {
+    if (line.stationId === null) continue;
+    const existing = linesByStation.get(line.stationId) ?? [];
+    existing.push(line);
+    linesByStation.set(line.stationId, existing);
+  }
+  const printResults = await printStationTickets(
+    [...linesByStation.entries()].map(([stationId, lines]) => ({
+      stationId,
+      dineTableName: result.dineTableName,
+      orderId,
+      lines: lines.map((l) => ({ quantity: l.quantity, itemName: l.itemName, note: l.note })),
+    })),
+  );
+
+  return { ...result, printResults };
 }

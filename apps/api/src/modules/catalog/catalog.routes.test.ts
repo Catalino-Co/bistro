@@ -202,4 +202,59 @@ describe('catalog routes', () => {
     expect(stationsById.get(itemId)).toBe(stationId);
     expect(stationsById.get(noStationItemId)).toBe(stationId);
   });
+
+  it('configures, updates, and clears a station printer', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/catalog/kitchen-stations',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: {
+        name: '__catalog_test_station_printer__',
+        printerHost: '192.168.1.50',
+        printerPort: 9100,
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const stationId = (created.json() as { kitchenStation: { id: number } }).kitchenStation.id;
+    expect(
+      (created.json() as { kitchenStation: { printerHost: string; printerPort: number } })
+        .kitchenStation,
+    ).toMatchObject({ printerHost: '192.168.1.50', printerPort: 9100 });
+
+    const mismatched = await app.inject({
+      method: 'POST',
+      url: '/catalog/kitchen-stations',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { name: '__catalog_test_station_bad__', printerHost: '10.0.0.1' },
+    });
+    expect(mismatched.statusCode).toBe(400);
+
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: `/catalog/kitchen-stations/${stationId}/printer`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { printerHost: '192.168.1.99', printerPort: 9101 },
+    });
+    expect(updated.statusCode).toBe(204);
+
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: `/catalog/kitchen-stations/${stationId}/printer`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { printerHost: null, printerPort: null },
+    });
+    expect(cleared.statusCode).toBe(204);
+
+    const list = await app.inject({
+      method: 'GET',
+      url: '/catalog/kitchen-stations',
+      headers: { cookie },
+    });
+    const station = (
+      list.json() as {
+        kitchenStations: { id: number; printerHost: string | null; printerPort: number | null }[];
+      }
+    ).kitchenStations.find((s) => s.id === stationId);
+    expect(station).toMatchObject({ printerHost: null, printerPort: null });
+  });
 });

@@ -104,7 +104,7 @@ export async function ordersRoutes(app: FastifyInstance) {
           return { error: 'order_closed' };
         case 'sent':
           reply.code(200);
-          return { lines: result.lines };
+          return { lines: result.lines, printResults: result.printResults };
       }
     },
   );

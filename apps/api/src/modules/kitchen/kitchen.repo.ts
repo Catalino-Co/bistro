@@ -1,5 +1,7 @@
 import { db, schema } from '@bistro/db';
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
+import { sendToPrinter } from './printer-client.js';
+import { buildTicketBytes, type TicketLine } from './ticket.js';
 
 export interface KitchenTicketLine {
   id: number;
@@ -81,4 +83,66 @@ export async function markLinePrepared(
       .where(eq(schema.orderLines.id, lineId));
     return { outcome: 'prepared' };
   });
+}
+
+export interface PrintTicketInput {
+  stationId: number;
+  dineTableName: string;
+  orderId: number;
+  lines: TicketLine[];
+}
+
+export type PrintStationResult =
+  | { stationId: number; stationName: string; outcome: 'printed' }
+  | { stationId: number; stationName: string; outcome: 'no_printer_configured' }
+  | { stationId: number; stationName: string; outcome: 'print_failed'; error: string };
+
+// Called from orders.repo.ts's sendToKitchen once lines are marked sent --
+// deliberately outside that function's own DB transaction, since holding a
+// transaction open while waiting on a network round-trip to a physical
+// printer (which might be slow, or unreachable) would hold that lock far
+// too long. A station with no printer configured isn't an error: it's a
+// station that only uses the on-screen board.
+export async function printStationTickets(
+  inputs: PrintTicketInput[],
+): Promise<PrintStationResult[]> {
+  if (inputs.length === 0) {
+    return [];
+  }
+
+  const stationIds = [...new Set(inputs.map((i) => i.stationId))];
+  const configs = await db
+    .select({
+      id: schema.kitchenStations.id,
+      name: schema.kitchenStations.name,
+      printerHost: schema.kitchenStations.printerHost,
+      printerPort: schema.kitchenStations.printerPort,
+    })
+    .from(schema.kitchenStations)
+    .where(inArray(schema.kitchenStations.id, stationIds));
+  const configById = new Map(configs.map((c) => [c.id, c]));
+
+  const results: PrintStationResult[] = [];
+  for (const input of inputs) {
+    const config = configById.get(input.stationId);
+    const stationName = config?.name ?? `Estación #${input.stationId}`;
+    if (!config?.printerHost || !config.printerPort) {
+      results.push({ stationId: input.stationId, stationName, outcome: 'no_printer_configured' });
+      continue;
+    }
+
+    const bytes = buildTicketBytes({
+      stationName,
+      dineTableName: input.dineTableName,
+      orderId: input.orderId,
+      lines: input.lines,
+    });
+    const sent = await sendToPrinter(config.printerHost, config.printerPort, bytes);
+    results.push(
+      sent.outcome === 'printed'
+        ? { stationId: input.stationId, stationName, outcome: 'printed' }
+        : { stationId: input.stationId, stationName, outcome: 'print_failed', error: sent.error },
+    );
+  }
+  return results;
 }

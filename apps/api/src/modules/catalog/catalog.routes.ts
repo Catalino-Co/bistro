@@ -12,11 +12,14 @@ import {
   listSubfamilies,
   listTaxRates,
   updateItemStation,
+  updateKitchenStationPrinter,
 } from './catalog.repo.js';
 import {
   familyBodySchema,
   itemBodySchema,
   itemStationBodySchema,
+  kitchenStationBodySchema,
+  kitchenStationPrinterBodySchema,
   nameBodySchema,
   subfamilyBodySchema,
 } from './catalog.schema.js';
@@ -151,13 +154,38 @@ export async function catalogRoutes(app: FastifyInstance) {
     '/catalog/kitchen-stations',
     { config: { permissions: [...MANAGE_CATALOG] } },
     async (request, reply) => {
-      const parsed = nameBodySchema.safeParse(request.body);
+      const parsed = kitchenStationBodySchema.safeParse(request.body);
       if (!parsed.success) {
         reply.code(400);
         return { error: 'invalid_request' };
       }
       reply.code(201);
-      return { kitchenStation: await createKitchenStation(parsed.data.name) };
+      return {
+        kitchenStation: await createKitchenStation(
+          parsed.data.name,
+          parsed.data.printerHost,
+          parsed.data.printerPort,
+        ),
+      };
+    },
+  );
+
+  app.patch(
+    '/catalog/kitchen-stations/:id/printer',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async (request, reply) => {
+      const parsed = kitchenStationPrinterBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: 'invalid_request' };
+      }
+      await updateKitchenStationPrinter(
+        Number((request.params as { id: string }).id),
+        parsed.data.printerHost,
+        parsed.data.printerPort,
+      );
+      reply.code(204);
+      return null;
     },
   );
 }
