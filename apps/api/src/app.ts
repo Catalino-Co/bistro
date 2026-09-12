@@ -11,6 +11,7 @@ import { orgRoutes } from './modules/org/org.routes.js';
 import { ordersRoutes } from './modules/orders/orders.routes.js';
 import { paymentsRoutes } from './modules/payments/payments.routes.js';
 import { rbacRoutes } from './modules/rbac/rbac.routes.js';
+import { reportsRoutes } from './modules/reports/reports.routes.js';
 import { usersRoutes } from './modules/users/users.routes.js';
 import csrfPlugin from './plugins/csrf.js';
 import guardPlugin from './plugins/guard.js';
@@ -44,6 +45,7 @@ export function buildApp(): FastifyInstance {
   app.register(ordersRoutes);
   app.register(paymentsRoutes);
   app.register(kitchenRoutes);
+  app.register(reportsRoutes);
   app.register(healthRoutes);
 
   return app;

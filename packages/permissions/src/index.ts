@@ -34,6 +34,11 @@ export const PERMISSIONS = [
     description: 'Open and close orders on a table for the current branch',
   },
   {
+    key: 'reports.view',
+    description:
+      "See the branch's sales figures: daily totals, average ticket, tips, sales by category and station",
+  },
+  {
     key: 'kitchen.manage',
     description: "View a station's pending tickets and mark lines prepared",
   },

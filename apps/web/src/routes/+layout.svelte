@@ -25,6 +25,25 @@
 		}
 	});
 
+	// El cambio de sucursal vivía suelto en la pantalla de Inicio, que ahora
+	// es el panel del día. Aquí está siempre a mano y deja claro sobre qué
+	// sucursal se está trabajando.
+	let switching = $state(false);
+
+	async function handleSelectBranch(event: Event) {
+		const branchId = Number((event.currentTarget as HTMLSelectElement).value);
+		if (!Number.isInteger(branchId) || branchId === session.user?.branchId) return;
+		switching = true;
+		try {
+			await session.selectBranch(branchId);
+			// Recarga dura a propósito: cada pantalla trae datos de la sucursal
+			// activa y ninguna sabe volver a pedirlos por su cuenta.
+			location.reload();
+		} finally {
+			switching = false;
+		}
+	}
+
 	async function handleLogout() {
 		await session.logout();
 		goto('/login');
@@ -44,6 +63,29 @@
 				<Icon name="plate" size={26} />
 				<span class="brand-name">Bistro</span>
 			</div>
+
+			{#if session.branches.length > 0}
+				<div class="branch-picker">
+					<label for="branch-picker">Sucursal</label>
+					{#if session.branches.length === 1}
+						<p class="branch-single">{session.branches[0]!.name}</p>
+					{:else}
+						<select
+							id="branch-picker"
+							value={session.user.branchId ?? ''}
+							disabled={switching}
+							onchange={handleSelectBranch}
+						>
+							{#if session.user.branchId === null}
+								<option value="">Elige una…</option>
+							{/if}
+							{#each session.branches as branch (branch.id)}
+								<option value={branch.id}>{branch.name}</option>
+							{/each}
+						</select>
+					{/if}
+				</div>
+			{/if}
 
 			<div class="nav-groups">
 				{#each NAV_GROUPS as group (group.label)}
@@ -80,9 +122,6 @@
 			<div class="sidebar-footer">
 				<div class="user-info">
 					<span class="user-name">{session.user.fullName}</span>
-					{#if session.currentBranch}
-						<span class="branch-name">{session.currentBranch.name}</span>
-					{/if}
 				</div>
 				<button type="button" class="logout" onclick={handleLogout}>
 					<Icon name="logout" size={18} />
@@ -231,9 +270,30 @@
 		white-space: nowrap;
 	}
 
-	.branch-name {
-		font-size: var(--text-sm);
+	.branch-picker {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		padding: 0 var(--space-2);
+	}
+
+	.branch-picker label {
+		font-size: var(--text-xs);
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
 		color: var(--color-text-muted);
+	}
+
+	.branch-picker select {
+		width: 100%;
+		min-height: var(--control-h-md);
+		font-weight: 600;
+	}
+
+	.branch-single {
+		margin: 0;
+		font-weight: 600;
 	}
 
 	.logout {
@@ -270,6 +330,7 @@
 		   `display: none` la barra colapsada se quedaría sin nombres y cada
 		   entrada sería un icono mudo. */
 		.brand-name,
+		.branch-picker,
 		.nav-label,
 		.nav-phase,
 		.group-label,
