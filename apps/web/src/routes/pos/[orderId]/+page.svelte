@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { apiFetch } from '$lib/api.js';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import { apiErrorMessage } from '$lib/errors.js';
 	import Icon from '$lib/components/Icon.svelte';
 
 	const orderId = Number(page.params.orderId);
@@ -87,6 +89,7 @@
 	let quantity = $state('1');
 	let note = $state('');
 	let errorMessage = $state('');
+	let lineToVoid = $state<OrderLine | null>(null);
 	let editingLineId = $state<number | null>(null);
 	let kitchenError = $state('');
 
@@ -270,18 +273,21 @@
 		}
 	}
 
-	async function voidLine(lineId: number) {
-		if (!confirm('¿Anular esta línea?')) return;
+	// Anular una línea es irreversible y queda en la cuenta tachada: pasa por
+	// el diálogo del sistema, no por el confirm() del navegador, que no se
+	// puede leer con el dedo en una tableta ni dice qué se va a anular.
+	async function voidLine() {
+		const line = lineToVoid;
+		if (!line) return;
 		errorMessage = '';
-		const response = await apiFetch(`/orders/${orderId}/lines/${lineId}/void`, {
+		const response = await apiFetch(`/orders/${orderId}/lines/${line.id}/void`, {
 			method: 'POST',
 		});
 		if (response.ok) {
-			if (editingLineId === lineId) resetForm();
+			if (editingLineId === line.id) resetForm();
 			await refresh();
 		} else {
-			const body = (await response.json()) as { error: string };
-			errorMessage = body.error;
+			errorMessage = await apiErrorMessage(response, 'No se pudo anular la línea.');
 		}
 	}
 
@@ -464,7 +470,7 @@
 									<button type="button" disabled={closed} onclick={() => startEdit(line)}
 										>Editar</button
 									>
-									<button type="button" disabled={closed} onclick={() => voidLine(line.id)}
+									<button type="button" disabled={closed} onclick={() => (lineToVoid = line)}
 										>Anular</button
 									>
 								</div>
@@ -560,6 +566,15 @@
 	</aside>
 </div>
 
+<ConfirmDialog
+	open={lineToVoid !== null}
+	title="¿Anular esta línea?"
+	message="Se anulará {lineToVoid?.quantity ?? ''}× del ítem. La línea se queda visible y tachada en la cuenta, pero deja de sumar al total."
+	confirmLabel="Anular línea"
+	onconfirm={voidLine}
+	onclose={() => (lineToVoid = null)}
+/>
+
 <style>
 	.pos {
 		display: flex;
@@ -596,8 +611,9 @@
 		background: var(--color-surface);
 		color: var(--color-text-muted);
 		border: 1px solid var(--color-border);
-		border-radius: 999px;
-		padding: 0.4rem 0.9rem;
+		border-radius: var(--radius-pill);
+		min-height: var(--touch-min);
+		padding: 0 var(--space-4);
 		font-weight: 500;
 	}
 

@@ -139,6 +139,16 @@ describe('floor routes', () => {
     expect(table?.name).toBe('__floor_test_table_renamed__');
     expect(table?.seats).toBe(6);
 
+    // Un área con mesas no se borra: sin este guard la FK saltaba como un
+    // 500 genérico y el área se quedaba donde estaba.
+    const deleteAreaWithTable = await app.inject({
+      method: 'DELETE',
+      url: `/floor/dine-areas/${areaId}`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+    });
+    expect(deleteAreaWithTable.statusCode).toBe(409);
+    expect((deleteAreaWithTable.json() as { error: string }).error).toBe('area_has_tables');
+
     const deleteTable = await app.inject({
       method: 'DELETE',
       url: `/floor/tables/${tableId}`,

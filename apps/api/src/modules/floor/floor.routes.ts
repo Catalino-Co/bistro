@@ -67,7 +67,11 @@ export async function floorRoutes(app: FastifyInstance) {
     '/floor/dine-areas/:id',
     { config: { permissions: [...MANAGE_FLOOR] } },
     async (request, reply) => {
-      await deleteDineArea(Number((request.params as { id: string }).id));
+      const result = await deleteDineArea(Number((request.params as { id: string }).id));
+      if (result.outcome === 'has_tables') {
+        reply.code(409);
+        return { error: 'area_has_tables' };
+      }
       reply.code(204);
       return null;
     },

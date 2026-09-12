@@ -33,6 +33,7 @@
 		value = $bindable(''),
 		required = false,
 		control,
+		oninput,
 		...rest
 	}: Props = $props();
 
@@ -62,7 +63,13 @@
 			{value}
 			aria-describedby={describedBy}
 			aria-invalid={error ? 'true' : undefined}
-			oninput={(event) => (value = event.currentTarget.value)}
+			oninput={(event) => {
+				value = event.currentTarget.value;
+				// El handler propio va después de actualizar `value`: si no, un
+				// buscador que lea el valor en cada tecla iría siempre un carácter
+				// por detrás. Y si se dejara en `...rest`, este oninput lo pisaría.
+				oninput?.(event);
+			}}
 		/>
 	{/if}
 

@@ -21,6 +21,8 @@
 		/** `danger` para borrados y anulaciones; `primary` para lo demás. */
 		tone?: 'danger' | 'primary';
 		onconfirm: () => void | Promise<void>;
+		/** Se llama al cerrar, se haya confirmado o no. */
+		onclose?: () => void;
 	}
 
 	let {
@@ -31,6 +33,7 @@
 		cancelLabel = 'Cancelar',
 		tone = 'danger',
 		onconfirm,
+		onclose,
 	}: Props = $props();
 
 	let running = $state(false);
@@ -40,17 +43,25 @@
 		try {
 			await onconfirm();
 			open = false;
+			onclose?.();
 		} finally {
 			running = false;
 		}
 	}
 </script>
 
-<Modal bind:open {title} size="sm">
+<Modal bind:open {title} size="sm" {onclose}>
 	<p class="message">{message}</p>
 
 	{#snippet footer()}
-		<Button variant="ghost" disabled={running} onclick={() => (open = false)}>
+		<Button
+			variant="ghost"
+			disabled={running}
+			onclick={() => {
+				open = false;
+				onclose?.();
+			}}
+		>
 			{cancelLabel}
 		</Button>
 		<Button variant={tone} loading={running} onclick={confirm}>

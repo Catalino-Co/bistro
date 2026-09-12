@@ -28,8 +28,22 @@ export async function updateDineArea(id: number, name: string): Promise<void> {
   await db.update(schema.dineAreas).set({ name }).where(eq(schema.dineAreas.id, id));
 }
 
-export async function deleteDineArea(id: number): Promise<void> {
+export type DeleteDineAreaResult = { outcome: 'deleted' } | { outcome: 'has_tables' };
+
+// Mismo guard que deleteDineTable: sin él, borrar un área con mesas choca
+// contra la FK y sale como un 500 genérico. La UI no lo notaba porque
+// descartaba el resultado, pero el área seguía ahí.
+export async function deleteDineArea(id: number): Promise<DeleteDineAreaResult> {
+  const [existingTable] = await db
+    .select({ id: schema.dineTables.id })
+    .from(schema.dineTables)
+    .where(eq(schema.dineTables.dineAreaId, id));
+  if (existingTable) {
+    return { outcome: 'has_tables' };
+  }
+
   await db.delete(schema.dineAreas).where(eq(schema.dineAreas.id, id));
+  return { outcome: 'deleted' };
 }
 
 export interface DineTableRow {

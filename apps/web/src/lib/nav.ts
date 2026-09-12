@@ -52,12 +52,7 @@ export const NAV_GROUPS: NavGroup[] = [
 export const SETTINGS_ITEMS: NavItem[] = [
   { href: '/settings/branches', label: 'Sucursales', icon: 'home', pending: 'Fase 4' },
   { href: '/settings/floor', label: 'Áreas y mesas', icon: 'tables' },
-  {
-    href: '/settings/stations',
-    label: 'Estaciones e impresoras',
-    icon: 'kitchen',
-    pending: 'Fase 2',
-  },
+  { href: '/settings/stations', label: 'Estaciones e impresoras', icon: 'kitchen' },
   { href: '/settings/payments', label: 'Métodos de pago', icon: 'payment', pending: 'Fase 4' },
   { href: '/settings/taxes', label: 'Impuestos', icon: 'catalog', pending: 'Fase 4' },
   { href: '/settings/users', label: 'Usuarios', icon: 'user', pending: 'Fase 4' },

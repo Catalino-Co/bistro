@@ -19,6 +19,12 @@
 		title: string;
 		description?: string;
 		size?: 'sm' | 'md' | 'lg';
+		/**
+		 * Se llama cada vez que el modal pasa a cerrado, venga de donde venga
+		 * (✕, Esc o Cancelar). Para cuando lo que manda no es un booleano sino
+		 * "qué fila estoy editando": el padre lo pone en null aquí.
+		 */
+		onclose?: () => void;
 		children: Snippet;
 		/** Barra de acciones al pie; se alinea a la derecha. */
 		footer?: Snippet;
@@ -29,9 +35,18 @@
 		title,
 		description,
 		size = 'md',
+		onclose,
 		children,
 		footer,
 	}: Props = $props();
+
+	// Un único camino de cierre: así el callback no se dispara dos veces
+	// cuando el navegador también emite su propio evento `close`.
+	function close() {
+		if (!open) return;
+		open = false;
+		onclose?.();
+	}
 
 	let dialog = $state<HTMLDialogElement | null>(null);
 	const titleId = $props.id();
@@ -53,12 +68,12 @@
 	function handleKeydown(event: KeyboardEvent) {
 		if (!open || event.key !== 'Escape') return;
 		event.preventDefault();
-		open = false;
+		close();
 	}
 
 	function handleCancel(event: Event) {
 		event.preventDefault();
-		open = false;
+		close();
 	}
 </script>
 
@@ -69,7 +84,7 @@
 	class="modal modal--{size}"
 	aria-labelledby={titleId}
 	oncancel={handleCancel}
-	onclose={() => (open = false)}
+	onclose={close}
 >
 	{#if open}
 		<header>
@@ -82,7 +97,7 @@
 				size="sm"
 				icon="close"
 				aria-label="Cerrar"
-				onclick={() => (open = false)}
+				onclick={close}
 			/>
 		</header>
 
