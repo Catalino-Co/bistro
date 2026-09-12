@@ -4,6 +4,7 @@ import { branchesRoutes } from './modules/branches/branches.routes.js';
 import { catalogRoutes } from './modules/catalog/catalog.routes.js';
 import { floorRoutes } from './modules/floor/floor.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
+import { kitchenRoutes } from './modules/kitchen/kitchen.routes.js';
 import { modifiersRoutes } from './modules/modifiers/modifiers.routes.js';
 import { ordersRoutes } from './modules/orders/orders.routes.js';
 import { paymentsRoutes } from './modules/payments/payments.routes.js';
@@ -36,6 +37,7 @@ export function buildApp(): FastifyInstance {
   app.register(floorRoutes);
   app.register(ordersRoutes);
   app.register(paymentsRoutes);
+  app.register(kitchenRoutes);
   app.register(healthRoutes);
 
   return app;

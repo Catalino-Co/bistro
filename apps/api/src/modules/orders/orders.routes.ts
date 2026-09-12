@@ -6,6 +6,7 @@ import {
   getOrderTotals,
   listOrderLines,
   openOrder,
+  sendToKitchen,
   updateOrderLine,
   voidOrderLine,
 } from './orders.repo.js';
@@ -79,6 +80,31 @@ export async function ordersRoutes(app: FastifyInstance) {
         case 'closed':
           reply.code(204);
           return null;
+      }
+    },
+  );
+
+  app.post(
+    '/orders/:id/send-to-kitchen',
+    { config: { permissions: [...MANAGE_ORDERS] } },
+    async (request, reply) => {
+      const branchId = request.session.branchId;
+      if (typeof branchId !== 'number') {
+        reply.code(409);
+        return { error: 'no_branch_selected' };
+      }
+
+      const result = await sendToKitchen(branchId, Number((request.params as { id: string }).id));
+      switch (result.outcome) {
+        case 'order_not_found':
+          reply.code(404);
+          return { error: 'order_not_found' };
+        case 'order_closed':
+          reply.code(409);
+          return { error: 'order_closed' };
+        case 'sent':
+          reply.code(200);
+          return { lines: result.lines };
       }
     },
   );

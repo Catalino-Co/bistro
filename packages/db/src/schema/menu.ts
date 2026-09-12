@@ -1,6 +1,7 @@
 import { bigint, numeric, text } from 'drizzle-orm/pg-core';
 import { bistro, statusEnum } from './_shared.js';
 import { taxRates } from './catalog.js';
+import { kitchenStations } from './kitchen.js';
 
 // categories -> families -> subfamilies -> items mirrors the legacy's
 // hierarchy, but every level gets real CRUD here -- the legacy had no UI
@@ -41,5 +42,10 @@ export const items = bistro.table('items', {
   taxRateId: bigint('tax_rate_id', { mode: 'number' })
     .notNull()
     .references(() => taxRates.id),
+  // Nullable: existing items predate stations, and not every restaurant
+  // wants to route everything on day one. A line for an unassigned item
+  // still marks fine as "sent to kitchen" -- it just won't show up on any
+  // station's ticket view.
+  stationId: bigint('station_id', { mode: 'number' }).references(() => kitchenStations.id),
   status: statusEnum('status').notNull().default('active'),
 });

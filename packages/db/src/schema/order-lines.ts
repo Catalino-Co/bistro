@@ -25,6 +25,12 @@ export const orderLines = bistro.table('order_lines', {
   // struck through) instead of being deleted, so a mistaken or
   // changed-mind item still shows up in what was ordered.
   voidedAt: timestamp('voided_at', { withTimezone: true }),
+  // "Enviar a cocina" is a manual, per-order batch action (not automatic on
+  // add), so a line can sit unsent while the waiter is still building the
+  // order. preparedAt is set by kitchen staff from the station's ticket
+  // view, independently of sentToKitchenAt.
+  sentToKitchenAt: timestamp('sent_to_kitchen_at', { withTimezone: true }),
+  preparedAt: timestamp('prepared_at', { withTimezone: true }),
 });
 
 export const orderLineModifiers = bistro.table(

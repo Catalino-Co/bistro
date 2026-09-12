@@ -28,6 +28,8 @@
 		note: string | null;
 		unitPrice: string;
 		voidedAt: string | null;
+		sentToKitchenAt: string | null;
+		preparedAt: string | null;
 		modifiers: { modifierId: number; name: string; priceDelta: string }[];
 	}
 	interface Totals {
@@ -69,6 +71,7 @@
 	let note = $state('');
 	let errorMessage = $state('');
 	let editingLineId = $state<number | null>(null);
+	let kitchenError = $state('');
 
 	function itemName(itemId: number): string {
 		return items.find((i) => i.id === itemId)?.name ?? `Ítem #${itemId}`;
@@ -125,6 +128,21 @@
 		const paid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
 		const cents = Math.round(Number(totals.total) * 10000) - Math.round(paid * 10000);
 		return Math.max(0, cents) / 10000;
+	}
+
+	function hasPendingKitchenLines(): boolean {
+		return lines.some((l) => l.voidedAt === null && l.sentToKitchenAt === null);
+	}
+
+	async function sendToKitchen() {
+		kitchenError = '';
+		const response = await apiFetch(`/orders/${orderId}/send-to-kitchen`, { method: 'POST' });
+		if (response.ok) {
+			await refresh();
+		} else {
+			const body = (await response.json()) as { error: string };
+			kitchenError = body.error;
+		}
 	}
 
 	async function selectItem(itemId: number) {
@@ -287,6 +305,11 @@
 						{#if line.voidedAt}
 							<span class="voided-tag">(anulada)</span>
 						{:else}
+							{#if line.preparedAt}
+								<span class="kitchen-tag">(preparado)</span>
+							{:else if line.sentToKitchenAt}
+								<span class="kitchen-tag">(enviado a cocina)</span>
+							{/if}
 							<button type="button" disabled={closed} onclick={() => startEdit(line)}
 								>Editar</button
 							>
@@ -307,6 +330,12 @@
 				<dt>Total</dt>
 				<dd>RD$ {Number(totals.total).toFixed(2)}</dd>
 			</dl>
+		{/if}
+		<button type="button" disabled={closed || !hasPendingKitchenLines()} onclick={sendToKitchen}>
+			Enviar a cocina
+		</button>
+		{#if kitchenError}
+			<p role="alert">{kitchenError}</p>
 		{/if}
 	</section>
 
@@ -414,6 +443,10 @@
 	}
 	.voided-tag {
 		font-style: italic;
+	}
+	.kitchen-tag {
+		font-size: 0.85em;
+		color: gray;
 	}
 	.totals {
 		display: grid;

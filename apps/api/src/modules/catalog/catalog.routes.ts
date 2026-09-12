@@ -3,16 +3,20 @@ import {
   createCategory,
   createFamily,
   createItem,
+  createKitchenStation,
   createSubfamily,
   listCategories,
   listFamilies,
   listItems,
+  listKitchenStations,
   listSubfamilies,
   listTaxRates,
+  updateItemStation,
 } from './catalog.repo.js';
 import {
   familyBodySchema,
   itemBodySchema,
+  itemStationBodySchema,
   nameBodySchema,
   subfamilyBodySchema,
 } from './catalog.schema.js';
@@ -113,8 +117,47 @@ export async function catalogRoutes(app: FastifyInstance) {
           parsed.data.name,
           parsed.data.price,
           parsed.data.taxRateId,
+          parsed.data.stationId,
         ),
       };
+    },
+  );
+
+  app.patch(
+    '/catalog/items/:id/station',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async (request, reply) => {
+      const parsed = itemStationBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: 'invalid_request' };
+      }
+      await updateItemStation(
+        Number((request.params as { id: string }).id),
+        parsed.data.stationId,
+      );
+      reply.code(204);
+      return null;
+    },
+  );
+
+  app.get(
+    '/catalog/kitchen-stations',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async () => ({ kitchenStations: await listKitchenStations() }),
+  );
+
+  app.post(
+    '/catalog/kitchen-stations',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async (request, reply) => {
+      const parsed = nameBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: 'invalid_request' };
+      }
+      reply.code(201);
+      return { kitchenStation: await createKitchenStation(parsed.data.name) };
     },
   );
 }

@@ -104,4 +104,102 @@ describe('catalog routes', () => {
     );
     expect(itemNames).toEqual(['__catalog_test_item__']);
   });
+
+  it('creates a kitchen station and routes an item to it', async () => {
+    const station = await app.inject({
+      method: 'POST',
+      url: '/catalog/kitchen-stations',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { name: '__catalog_test_station__' },
+    });
+    expect(station.statusCode).toBe(201);
+    const stationId = (station.json() as { kitchenStation: { id: number } }).kitchenStation.id;
+
+    const list = await app.inject({
+      method: 'GET',
+      url: '/catalog/kitchen-stations',
+      headers: { cookie },
+    });
+    const stationNames = (
+      list.json() as { kitchenStations: { name: string }[] }
+    ).kitchenStations.map((s) => s.name);
+    expect(stationNames).toContain('__catalog_test_station__');
+
+    const category = await app.inject({
+      method: 'POST',
+      url: '/catalog/categories',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { name: '__catalog_test_station_cat__' },
+    });
+    const categoryId = (category.json() as { category: { id: number } }).category.id;
+    const family = await app.inject({
+      method: 'POST',
+      url: '/catalog/families',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { categoryId, name: '__catalog_test_station_fam__' },
+    });
+    const familyId = (family.json() as { family: { id: number } }).family.id;
+    const subfamily = await app.inject({
+      method: 'POST',
+      url: '/catalog/subfamilies',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { familyId, name: '__catalog_test_station_sub__' },
+    });
+    const subfamilyId = (subfamily.json() as { subfamily: { id: number } }).subfamily.id;
+
+    const taxRateId = await findTaxRateIdByName('ITBIS 18%');
+    const itemWithStation = await app.inject({
+      method: 'POST',
+      url: '/catalog/items',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: {
+        subfamilyId,
+        name: '__catalog_test_station_item__',
+        price: '50.00',
+        taxRateId,
+        stationId,
+      },
+    });
+    expect(itemWithStation.statusCode).toBe(201);
+    const itemId = (itemWithStation.json() as { item: { id: number; stationId: number | null } })
+      .item.id;
+    expect((itemWithStation.json() as { item: { stationId: number | null } }).item.stationId).toBe(
+      stationId,
+    );
+
+    // A second, existing item can also be routed after the fact.
+    const noStationItem = await app.inject({
+      method: 'POST',
+      url: '/catalog/items',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { subfamilyId, name: '__catalog_test_station_item2__', price: '30.00', taxRateId },
+    });
+    const noStationItemId = (noStationItem.json() as { item: { id: number; stationId: number | null } })
+      .item.id;
+    expect(
+      (noStationItem.json() as { item: { stationId: number | null } }).item.stationId,
+    ).toBeNull();
+
+    const assign = await app.inject({
+      method: 'PATCH',
+      url: `/catalog/items/${noStationItemId}/station`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { stationId },
+    });
+    expect(assign.statusCode).toBe(204);
+
+    const itemsAfter = await app.inject({
+      method: 'GET',
+      url: `/catalog/items?subfamilyId=${subfamilyId}`,
+      headers: { cookie },
+    });
+    const stationsById = new Map(
+      (itemsAfter.json() as { items: { id: number; stationId: number | null }[] }).items.map((i) => [
+        i.id,
+        i.stationId,
+      ]),
+    );
+    expect(stationsById.get(itemId)).toBe(stationId);
+    expect(stationsById.get(noStationItemId)).toBe(stationId);
+  });
 });

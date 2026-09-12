@@ -33,6 +33,10 @@ export const PERMISSIONS = [
     key: 'orders.manage',
     description: 'Open and close orders on a table for the current branch',
   },
+  {
+    key: 'kitchen.manage',
+    description: "View a station's pending tickets and mark lines prepared",
+  },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]['key'];

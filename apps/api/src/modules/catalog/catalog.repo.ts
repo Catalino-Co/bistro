@@ -91,6 +91,7 @@ export interface ItemRow {
   name: string;
   price: string;
   taxRateId: number;
+  stationId: number | null;
   status: 'active' | 'inactive';
 }
 
@@ -102,6 +103,7 @@ export async function listItems(subfamilyId?: number): Promise<ItemRow[]> {
       name: schema.items.name,
       price: schema.items.price,
       taxRateId: schema.items.taxRateId,
+      stationId: schema.items.stationId,
       status: schema.items.status,
     })
     .from(schema.items);
@@ -113,11 +115,38 @@ export async function createItem(
   name: string,
   price: string,
   taxRateId: number,
+  stationId?: number,
 ): Promise<ItemRow> {
   const [row] = await db
     .insert(schema.items)
-    .values({ subfamilyId, name, price, taxRateId })
+    .values({ subfamilyId, name, price, taxRateId, stationId: stationId ?? null })
     .returning();
   if (!row) throw new Error('Failed to create item');
+  return row;
+}
+
+export async function updateItemStation(itemId: number, stationId: number | null): Promise<void> {
+  await db.update(schema.items).set({ stationId }).where(eq(schema.items.id, itemId));
+}
+
+export interface KitchenStationRow {
+  id: number;
+  name: string;
+  status: 'active' | 'inactive';
+}
+
+export async function listKitchenStations(): Promise<KitchenStationRow[]> {
+  return db
+    .select({
+      id: schema.kitchenStations.id,
+      name: schema.kitchenStations.name,
+      status: schema.kitchenStations.status,
+    })
+    .from(schema.kitchenStations);
+}
+
+export async function createKitchenStation(name: string): Promise<KitchenStationRow> {
+  const [row] = await db.insert(schema.kitchenStations).values({ name }).returning();
+  if (!row) throw new Error('Failed to create kitchen station');
   return row;
 }

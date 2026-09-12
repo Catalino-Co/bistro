@@ -20,6 +20,7 @@
 		subfamilyId: number;
 		name: string;
 		price: string;
+		stationId: number | null;
 	}
 	interface TaxRate {
 		id: number;
@@ -30,6 +31,10 @@
 		name: string;
 		selectionType: 'single' | 'multiple';
 	}
+	interface KitchenStation {
+		id: number;
+		name: string;
+	}
 
 	let categories = $state<Category[]>([]);
 	let families = $state<Family[]>([]);
@@ -38,6 +43,7 @@
 	let taxRates = $state<TaxRate[]>([]);
 	let allModifierGroups = $state<ModifierGroup[]>([]);
 	let itemModifierGroups = $state<ModifierGroup[]>([]);
+	let kitchenStations = $state<KitchenStation[]>([]);
 
 	let selectedCategoryId = $state<number | null>(null);
 	let selectedFamilyId = $state<number | null>(null);
@@ -51,6 +57,8 @@
 	let newItemName = $state('');
 	let newItemPrice = $state('');
 	let newItemTaxRateId = $state<number | null>(null);
+	let newItemStationId = $state<number | null>(null);
+	let newStationName = $state('');
 
 	async function loadCategories() {
 		const response = await apiFetch('/catalog/categories');
@@ -88,6 +96,40 @@
 		if (response.ok) {
 			items = ((await response.json()) as { items: Item[] }).items;
 		}
+	}
+
+	async function loadKitchenStations() {
+		const response = await apiFetch('/catalog/kitchen-stations');
+		if (response.ok) {
+			kitchenStations = ((await response.json()) as { kitchenStations: KitchenStation[] })
+				.kitchenStations;
+		}
+	}
+
+	async function createKitchenStation(event: SubmitEvent) {
+		event.preventDefault();
+		if (!newStationName.trim()) return;
+		const response = await apiFetch('/catalog/kitchen-stations', {
+			method: 'POST',
+			body: JSON.stringify({ name: newStationName.trim() }),
+		});
+		if (response.ok) {
+			newStationName = '';
+			await loadKitchenStations();
+		}
+	}
+
+	function stationName(stationId: number | null): string {
+		if (stationId === null) return 'Sin estación';
+		return kitchenStations.find((s) => s.id === stationId)?.name ?? `Estación #${stationId}`;
+	}
+
+	async function setItemStation(itemId: number, stationId: number | null) {
+		await apiFetch(`/catalog/items/${itemId}/station`, {
+			method: 'PATCH',
+			body: JSON.stringify({ stationId }),
+		});
+		if (selectedSubfamilyId !== null) await loadItems(selectedSubfamilyId);
 	}
 
 	async function loadAllModifierGroups() {
@@ -199,11 +241,13 @@
 				name: newItemName.trim(),
 				price: newItemPrice.trim(),
 				taxRateId: newItemTaxRateId,
+				stationId: newItemStationId ?? undefined,
 			}),
 		});
 		if (response.ok) {
 			newItemName = '';
 			newItemPrice = '';
+			newItemStationId = null;
 			await loadItems(selectedSubfamilyId);
 		}
 	}
@@ -212,6 +256,7 @@
 		loadCategories();
 		loadTaxRates();
 		loadAllModifierGroups();
+		loadKitchenStations();
 	});
 </script>
 
@@ -274,6 +319,19 @@
 				{#each items as item (item.id)}
 					<li>
 						<button onclick={() => selectItem(item.id)}>{item.name} — RD$ {item.price}</button>
+						<select
+							value={item.stationId === null ? '' : String(item.stationId)}
+							onchange={(e) => {
+								const raw = e.currentTarget.value;
+								setItemStation(item.id, raw === '' ? null : Number(raw));
+							}}
+						>
+							<option value="">Sin estación</option>
+							{#each kitchenStations as station (station.id)}
+								<option value={station.id}>{station.name}</option>
+							{/each}
+						</select>
+						<span>({stationName(item.stationId)})</span>
 					</li>
 				{/each}
 			</ul>
@@ -285,10 +343,29 @@
 						<option value={taxRate.id}>{taxRate.name}</option>
 					{/each}
 				</select>
+				<select bind:value={newItemStationId}>
+					<option value={null}>Sin estación</option>
+					{#each kitchenStations as station (station.id)}
+						<option value={station.id}>{station.name}</option>
+					{/each}
+				</select>
 				<button type="submit">Crear</button>
 			</form>
 		</section>
 	{/if}
+
+	<section>
+		<h2>Estaciones de cocina</h2>
+		<ul>
+			{#each kitchenStations as station (station.id)}
+				<li>{station.name}</li>
+			{/each}
+		</ul>
+		<form onsubmit={createKitchenStation}>
+			<input type="text" bind:value={newStationName} placeholder="Nueva estación" required />
+			<button type="submit">Crear</button>
+		</form>
+	</section>
 
 	{#if selectedItemId !== null}
 		<section>

@@ -1,5 +1,5 @@
 import { db, schema } from '@bistro/db';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { recordAuditEvent } from '../audit/audit.repo.js';
 import { sumPaymentsAmount } from '../payments/payments.repo.js';
 import { computeOrderTotals } from './order-totals.repo.js';
@@ -189,6 +189,8 @@ export interface OrderLineRow {
   note: string | null;
   unitPrice: string;
   voidedAt: Date | null;
+  sentToKitchenAt: Date | null;
+  preparedAt: Date | null;
   modifiers: OrderLineModifierRow[];
 }
 
@@ -284,6 +286,8 @@ export async function addOrderLine(
         note: line.note,
         unitPrice: line.unitPrice,
         voidedAt: line.voidedAt,
+        sentToKitchenAt: line.sentToKitchenAt,
+        preparedAt: line.preparedAt,
         modifiers: modifierRows.map((m) => ({
           modifierId: m.id,
           name: m.name,
@@ -312,6 +316,8 @@ export async function listOrderLines(branchId: number, orderId: number): Promise
       note: schema.orderLines.note,
       unitPrice: schema.orderLines.unitPrice,
       voidedAt: schema.orderLines.voidedAt,
+      sentToKitchenAt: schema.orderLines.sentToKitchenAt,
+      preparedAt: schema.orderLines.preparedAt,
     })
     .from(schema.orderLines)
     .where(eq(schema.orderLines.orderId, orderId));
@@ -390,6 +396,8 @@ export async function updateOrderLine(
         note: schema.orderLines.note,
         unitPrice: schema.orderLines.unitPrice,
         voidedAt: schema.orderLines.voidedAt,
+        sentToKitchenAt: schema.orderLines.sentToKitchenAt,
+        preparedAt: schema.orderLines.preparedAt,
       })
       .from(schema.orderLines)
       .where(and(eq(schema.orderLines.id, lineId), eq(schema.orderLines.orderId, orderId)))
@@ -458,6 +466,8 @@ export async function updateOrderLine(
         note: nextNote,
         unitPrice: line.unitPrice,
         voidedAt: line.voidedAt,
+        sentToKitchenAt: line.sentToKitchenAt,
+        preparedAt: line.preparedAt,
         modifiers: modifierRows.map((m) => ({
           modifierId: m.id,
           name: m.name,
@@ -523,6 +533,8 @@ export async function voidOrderLine(
         note: schema.orderLines.note,
         unitPrice: schema.orderLines.unitPrice,
         voidedAt: schema.orderLines.voidedAt,
+        sentToKitchenAt: schema.orderLines.sentToKitchenAt,
+        preparedAt: schema.orderLines.preparedAt,
       })
       .from(schema.orderLines)
       .where(and(eq(schema.orderLines.id, lineId), eq(schema.orderLines.orderId, orderId)))
@@ -557,6 +569,8 @@ export async function voidOrderLine(
         note: line.note,
         unitPrice: line.unitPrice,
         voidedAt,
+        sentToKitchenAt: line.sentToKitchenAt,
+        preparedAt: line.preparedAt,
         modifiers: modifierRows,
       },
     };
@@ -625,4 +639,68 @@ export async function getOrderTotals(
       total: totals.total.toFixed(4),
     },
   };
+}
+
+export interface SentLineRow {
+  id: number;
+  itemId: number;
+  stationId: number | null;
+}
+
+export type SendToKitchenResult =
+  | { outcome: 'sent'; lines: SentLineRow[] }
+  | { outcome: 'order_not_found' }
+  | { outcome: 'order_closed' };
+
+// Manual, per-order batch action (not automatic on add): marks every
+// not-yet-sent, non-voided line as sent to the kitchen in one go, so a
+// waiter can build up several lines and send them together as one
+// comanda. A line whose item has no station assigned still gets marked
+// sent -- it just won't surface on any station's ticket view.
+export async function sendToKitchen(
+  branchId: number,
+  orderId: number,
+): Promise<SendToKitchenResult> {
+  return db.transaction(async (tx) => {
+    const [order] = await tx
+      .select({ status: schema.orders.status })
+      .from(schema.orders)
+      .where(and(eq(schema.orders.id, orderId), eq(schema.orders.branchId, branchId)));
+    if (!order) {
+      return { outcome: 'order_not_found' };
+    }
+    if (order.status === 'closed') {
+      return { outcome: 'order_closed' };
+    }
+
+    const pendingLines = await tx
+      .select({
+        id: schema.orderLines.id,
+        itemId: schema.orderLines.itemId,
+        stationId: schema.items.stationId,
+      })
+      .from(schema.orderLines)
+      .innerJoin(schema.items, eq(schema.items.id, schema.orderLines.itemId))
+      .where(
+        and(
+          eq(schema.orderLines.orderId, orderId),
+          isNull(schema.orderLines.voidedAt),
+          isNull(schema.orderLines.sentToKitchenAt),
+        ),
+      );
+
+    if (pendingLines.length > 0) {
+      await tx
+        .update(schema.orderLines)
+        .set({ sentToKitchenAt: new Date() })
+        .where(
+          inArray(
+            schema.orderLines.id,
+            pendingLines.map((l) => l.id),
+          ),
+        );
+    }
+
+    return { outcome: 'sent', lines: pendingLines };
+  });
 }

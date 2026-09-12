@@ -45,6 +45,7 @@
 			<a href="/admin/catalog">Catálogo</a>
 			<a href="/admin/modifiers">Modificadores</a>
 			<a href="/admin/roles">Roles y permisos</a>
+			<a href="/kitchen">Cocina</a>
 			<button onclick={handleLogout}>Cerrar sesión</button>
 		</header>
 	{/if}
