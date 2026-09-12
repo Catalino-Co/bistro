@@ -50,12 +50,12 @@ export const NAV_GROUPS: NavGroup[] = [
 // principal viven aquí dentro; las que aún no existen se marcan igual que
 // arriba en vez de desaparecer.
 export const SETTINGS_ITEMS: NavItem[] = [
-  { href: '/settings/branches', label: 'Sucursales', icon: 'home', pending: 'Fase 4' },
+  { href: '/settings/branches', label: 'Sucursales', icon: 'home' },
   { href: '/settings/floor', label: 'Áreas y mesas', icon: 'tables' },
   { href: '/settings/stations', label: 'Estaciones e impresoras', icon: 'kitchen' },
   { href: '/settings/payments', label: 'Métodos de pago', icon: 'payment', pending: 'Fase 4' },
   { href: '/settings/taxes', label: 'Impuestos', icon: 'catalog', pending: 'Fase 4' },
-  { href: '/settings/users', label: 'Usuarios', icon: 'user', pending: 'Fase 4' },
+  { href: '/settings/users', label: 'Usuarios', icon: 'user' },
   { href: '/settings/roles', label: 'Roles y permisos', icon: 'roles' },
   { href: '/settings/audit', label: 'Auditoría', icon: 'lock', pending: 'Fase 4' },
 ];

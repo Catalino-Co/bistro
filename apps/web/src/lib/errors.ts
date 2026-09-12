@@ -28,6 +28,14 @@ const MESSAGES: Record<string, string> = {
 
   // Cocina
   station_not_found: 'La estación ya no existe.',
+
+  // Usuarios y organización
+  username_taken: 'Ese nombre de usuario ya está en uso.',
+  user_not_found: 'El empleado ya no existe.',
+  role_not_found: 'El rol ya no existe.',
+  branch_not_found: 'La sucursal ya no existe.',
+  company_not_found: 'La compañía ya no existe.',
+  business_unit_not_found: 'La unidad de negocio ya no existe.',
 };
 
 /**
