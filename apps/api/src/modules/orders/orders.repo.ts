@@ -62,6 +62,33 @@ export async function findOpenOrderForTable(
   return order ?? null;
 }
 
+export interface OrderDetail extends OrderRow {
+  dineTableName: string;
+  customerName: string | null;
+}
+
+// The POS screen's own header (which table, which dispatch mode, which
+// customer) -- dispatch mode and customer are fixed at open time (there's
+// no route to change them once set), so this is read-only by design.
+export async function getOrderDetail(branchId: number, orderId: number): Promise<OrderDetail | null> {
+  const [row] = await db
+    .select({
+      id: schema.orders.id,
+      branchId: schema.orders.branchId,
+      dineTableId: schema.orders.dineTableId,
+      status: schema.orders.status,
+      dispatchMode: schema.orders.dispatchMode,
+      customerId: schema.orders.customerId,
+      dineTableName: schema.dineTables.name,
+      customerName: schema.customers.name,
+    })
+    .from(schema.orders)
+    .innerJoin(schema.dineTables, eq(schema.dineTables.id, schema.orders.dineTableId))
+    .leftJoin(schema.customers, eq(schema.customers.id, schema.orders.customerId))
+    .where(and(eq(schema.orders.id, orderId), eq(schema.orders.branchId, branchId)));
+  return row ? { ...row, customerName: row.customerName ?? null } : null;
+}
+
 // Opening an order and occupying its table must happen atomically -- a
 // failure between the two steps would otherwise leave a table marked
 // available with an open order already sitting on it (or the reverse).

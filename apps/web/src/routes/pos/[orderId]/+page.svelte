@@ -49,9 +49,22 @@
 		tipAmount: string;
 		tenderedAmount: string | null;
 	}
+	interface OrderDetail {
+		dineTableName: string;
+		dispatchMode: 'dine_in' | 'delivery' | 'pickup' | 'room_service';
+		customerName: string | null;
+	}
+
+	const DISPATCH_MODE_LABELS: Record<OrderDetail['dispatchMode'], string> = {
+		dine_in: 'En mesa',
+		delivery: 'Delivery',
+		pickup: 'Pickup',
+		room_service: 'Room service',
+	};
 
 	let items = $state<Item[]>([]);
 	let lines = $state<OrderLine[]>([]);
+	let orderDetail = $state<OrderDetail | null>(null);
 	let totals = $state<Totals | null>(null);
 	let paymentMethods = $state<PaymentMethod[]>([]);
 	let payments = $state<Payment[]>([]);
@@ -87,6 +100,13 @@
 		const response = await apiFetch('/catalog/items');
 		if (response.ok) {
 			items = ((await response.json()) as { items: Item[] }).items;
+		}
+	}
+
+	async function loadOrderDetail() {
+		const response = await apiFetch(`/orders/${orderId}`);
+		if (response.ok) {
+			orderDetail = ((await response.json()) as { order: OrderDetail }).order;
 		}
 	}
 
@@ -286,12 +306,21 @@
 	$effect(() => {
 		loadItems();
 		loadPaymentMethods();
+		loadOrderDetail();
 		refresh();
 	});
 </script>
 
 <main>
 	<h1>Orden #{orderId}</h1>
+	{#if orderDetail}
+		<p>
+			{orderDetail.dineTableName} — {DISPATCH_MODE_LABELS[orderDetail.dispatchMode]}
+			{#if orderDetail.customerName}
+				— {orderDetail.customerName}
+			{/if}
+		</p>
+	{/if}
 
 	<section>
 		<h2>Líneas</h2>

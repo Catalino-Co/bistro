@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { branchesRoutes } from './modules/branches/branches.routes.js';
 import { catalogRoutes } from './modules/catalog/catalog.routes.js';
+import { customersRoutes } from './modules/customers/customers.routes.js';
 import { floorRoutes } from './modules/floor/floor.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { kitchenRoutes } from './modules/kitchen/kitchen.routes.js';
@@ -33,6 +34,7 @@ export function buildApp(): FastifyInstance {
   app.register(branchesRoutes);
   app.register(rbacRoutes);
   app.register(catalogRoutes);
+  app.register(customersRoutes);
   app.register(modifiersRoutes);
   app.register(floorRoutes);
   app.register(ordersRoutes);

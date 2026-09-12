@@ -13,17 +13,39 @@
 		seats: number;
 		status: string;
 	}
+	interface CustomerType {
+		id: number;
+		name: string;
+		allowsRoomService: boolean;
+	}
+	interface Customer {
+		id: number;
+		name: string;
+		customerTypeName: string;
+		allowsRoomService: boolean;
+	}
+	type DispatchMode = 'dine_in' | 'delivery' | 'pickup' | 'room_service';
 
 	let dineAreas = $state<DineArea[]>([]);
 	let tables = $state<DineTable[]>([]);
 	let selectedAreaId = $state<number | null>(null);
 	let noBranchSelected = $state(false);
+	let customerTypes = $state<CustomerType[]>([]);
 
 	let newAreaName = $state('');
 	let newTableName = $state('');
 	let newTableSeats = $state('4');
 	let editingAreaId = $state<number | null>(null);
 	let editingAreaName = $state('');
+
+	let openingTableId = $state<number | null>(null);
+	let openingDispatchMode = $state<DispatchMode>('dine_in');
+	let customerSearch = $state('');
+	let customerResults = $state<Customer[]>([]);
+	let selectedCustomerId = $state<number | null>(null);
+	let newCustomerName = $state('');
+	let newCustomerTypeId = $state<number | null>(null);
+	let openOrderError = $state('');
 
 	async function loadDineAreas() {
 		const response = await apiFetch('/floor/dine-areas');
@@ -115,14 +137,74 @@
 		}
 	}
 
-	async function openOrder(dineTableId: number) {
+	async function loadCustomerTypes() {
+		const response = await apiFetch('/customer-types');
+		if (response.ok) {
+			customerTypes = ((await response.json()) as { customerTypes: CustomerType[] }).customerTypes;
+			if (newCustomerTypeId === null && customerTypes.length > 0) {
+				newCustomerTypeId =
+					customerTypes.find((t) => t.allowsRoomService)?.id ?? customerTypes[0]!.id;
+			}
+		}
+	}
+
+	function startOpenOrder(tableId: number) {
+		openingTableId = tableId;
+		openingDispatchMode = 'dine_in';
+		customerSearch = '';
+		customerResults = [];
+		selectedCustomerId = null;
+		newCustomerName = '';
+		openOrderError = '';
+	}
+
+	function cancelOpenOrder() {
+		openingTableId = null;
+	}
+
+	async function searchCustomers() {
+		if (!customerSearch.trim()) {
+			customerResults = [];
+			return;
+		}
+		const response = await apiFetch(`/customers?search=${encodeURIComponent(customerSearch.trim())}`);
+		if (response.ok) {
+			customerResults = ((await response.json()) as { customers: Customer[] }).customers;
+		}
+	}
+
+	async function quickAddCustomer() {
+		if (!newCustomerName.trim() || newCustomerTypeId === null) return;
+		const response = await apiFetch('/customers', {
+			method: 'POST',
+			body: JSON.stringify({ customerTypeId: newCustomerTypeId, name: newCustomerName.trim() }),
+		});
+		if (response.ok) {
+			const { customer } = (await response.json()) as { customer: Customer };
+			selectedCustomerId = customer.id;
+			customerResults = [customer];
+			newCustomerName = '';
+		}
+	}
+
+	async function confirmOpenOrder() {
+		if (openingTableId === null) return;
+		openOrderError = '';
 		const response = await apiFetch('/orders', {
 			method: 'POST',
-			body: JSON.stringify({ dineTableId }),
+			body: JSON.stringify({
+				dineTableId: openingTableId,
+				dispatchMode: openingDispatchMode,
+				customerId:
+					openingDispatchMode === 'room_service' ? (selectedCustomerId ?? undefined) : undefined,
+			}),
 		});
 		if (response.ok) {
 			const { order } = (await response.json()) as { order: { id: number } };
 			goto(`/pos/${order.id}`);
+		} else {
+			const body = (await response.json()) as { error: string };
+			openOrderError = body.error;
 		}
 	}
 
@@ -136,6 +218,7 @@
 
 	$effect(() => {
 		loadDineAreas();
+		loadCustomerTypes();
 	});
 </script>
 
@@ -178,9 +261,80 @@
 							{table.name} ({table.seats} puestos) — {table.status}
 							<button onclick={() => deleteTable(table.id)}>Eliminar</button>
 							{#if table.status === 'available'}
-								<button onclick={() => openOrder(table.id)}>Abrir orden</button>
+								{#if openingTableId === table.id}
+									<button onclick={cancelOpenOrder}>Cancelar</button>
+								{:else}
+									<button onclick={() => startOpenOrder(table.id)}>Abrir orden</button>
+								{/if}
 							{:else if table.status === 'occupied'}
 								<button onclick={() => viewOrder(table.id)}>Ver orden</button>
+							{/if}
+
+							{#if openingTableId === table.id}
+								<fieldset>
+									<legend>Abrir orden — {table.name}</legend>
+									<label>
+										Modo de despacho:
+										<select bind:value={openingDispatchMode}>
+											<option value="dine_in">En mesa</option>
+											<option value="delivery">Delivery</option>
+											<option value="pickup">Pickup</option>
+											<option value="room_service">Room service</option>
+										</select>
+									</label>
+
+									{#if openingDispatchMode === 'room_service'}
+										<div>
+											<input
+												type="text"
+												bind:value={customerSearch}
+												oninput={searchCustomers}
+												placeholder="Buscar huésped por nombre"
+											/>
+											{#if customerResults.length > 0}
+												<ul>
+													{#each customerResults as customer (customer.id)}
+														<li>
+															<button
+																type="button"
+																onclick={() => (selectedCustomerId = customer.id)}
+															>
+																{customer.name} ({customer.customerTypeName})
+															</button>
+															{#if selectedCustomerId === customer.id}
+																<strong>seleccionado</strong>
+															{/if}
+														</li>
+													{/each}
+												</ul>
+											{/if}
+
+											<p>¿No existe? Créalo:</p>
+											<select bind:value={newCustomerTypeId}>
+												{#each customerTypes as type (type.id)}
+													<option value={type.id}>{type.name}</option>
+												{/each}
+											</select>
+											<input
+												type="text"
+												bind:value={newCustomerName}
+												placeholder="Nombre del huésped"
+											/>
+											<button type="button" onclick={quickAddCustomer}>Crear y usar</button>
+										</div>
+									{/if}
+
+									<button
+										type="button"
+										disabled={openingDispatchMode === 'room_service' && selectedCustomerId === null}
+										onclick={confirmOpenOrder}
+									>
+										Confirmar apertura
+									</button>
+									{#if openOrderError}
+										<p role="alert">{openOrderError}</p>
+									{/if}
+								</fieldset>
 							{/if}
 						</li>
 					{/each}

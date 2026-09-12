@@ -122,6 +122,40 @@ describe('orders routes', () => {
     });
   });
 
+  it('returns order detail with the dine table name and a null customer for dine_in', async () => {
+    const table = await createDineTable(dineAreaId, '__orders_test_table_detail__', 2);
+    const open = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { dineTableId: table.id },
+    });
+    const orderId = (open.json() as { order: { id: number } }).order.id;
+
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/orders/${orderId}`,
+      headers: { cookie },
+    });
+    expect(detail.statusCode).toBe(200);
+    expect((detail.json() as { order: unknown }).order).toMatchObject({
+      id: orderId,
+      dispatchMode: 'dine_in',
+      dineTableName: '__orders_test_table_detail__',
+      customerName: null,
+    });
+  });
+
+  it('returns order_not_found for a nonexistent order id', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/orders/999999999',
+      headers: { cookie },
+    });
+    expect(response.statusCode).toBe(404);
+    expect((response.json() as { error: string }).error).toBe('order_not_found');
+  });
+
   it('rejects opening an order on a table from another branch', async () => {
     const otherBranch = await createBranchFixture('orders-other');
     const otherArea = await createDineArea(otherBranch.branchId, '__orders_test_area_other__');
