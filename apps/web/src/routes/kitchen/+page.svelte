@@ -20,7 +20,7 @@
 	});
 </script>
 
-<main>
+<div class="page">
 	<h1>Cocina</h1>
 	{#if stations.length === 0}
 		<p>No hay estaciones de cocina configuradas. Créalas en Catálogo.</p>
@@ -31,4 +31,4 @@
 			{/each}
 		</ul>
 	{/if}
-</main>
+</div>

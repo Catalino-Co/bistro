@@ -40,7 +40,7 @@
 	});
 </script>
 
-<main>
+<div class="page">
 	<h1>Cocina — estación #{stationId}</h1>
 	{#if tickets.length === 0}
 		<p>Sin pendientes.</p>
@@ -61,4 +61,4 @@
 	{#if errorMessage}
 		<p role="alert">{errorMessage}</p>
 	{/if}
-</main>
+</div>

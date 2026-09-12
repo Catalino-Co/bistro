@@ -77,7 +77,7 @@
 	});
 </script>
 
-<main>
+<div class="page">
 	<h1>Modificadores</h1>
 
 	<section>
@@ -114,4 +114,4 @@
 			</form>
 		</section>
 	{/if}
-</main>
+</div>

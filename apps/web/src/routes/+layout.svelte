@@ -5,19 +5,11 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import Icon from '$lib/components/Icon.svelte';
 	import Toast from '$lib/components/Toast.svelte';
+	import { isActive, NAV_GROUPS } from '$lib/nav.js';
 	import { session } from '$lib/session.svelte.js';
 	import '$lib/styles/tokens.css';
 
 	let { children } = $props();
-
-	const NAV_ITEMS = [
-		{ href: '/', label: 'Inicio', icon: 'home' as const },
-		{ href: '/admin/floor', label: 'Mesas y áreas', icon: 'tables' as const },
-		{ href: '/admin/catalog', label: 'Catálogo', icon: 'catalog' as const },
-		{ href: '/admin/modifiers', label: 'Modificadores', icon: 'modifiers' as const },
-		{ href: '/admin/roles', label: 'Roles y permisos', icon: 'roles' as const },
-		{ href: '/kitchen', label: 'Cocina', icon: 'kitchen' as const },
-	];
 
 	onMount(() => {
 		session.load();
@@ -37,10 +29,6 @@
 		await session.logout();
 		goto('/login');
 	}
-
-	function isActive(href: string): boolean {
-		return href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
-	}
 </script>
 
 <svelte:head>
@@ -51,22 +39,43 @@
 	<p class="loading">Cargando…</p>
 {:else if session.user}
 	<div class="shell">
-		<nav class="sidebar">
+		<nav class="sidebar" aria-label="Navegación principal">
 			<div class="brand">
 				<Icon name="plate" size={26} />
-				<span>Bistro</span>
+				<span class="brand-name">Bistro</span>
 			</div>
 
-			<ul class="nav-list">
-				{#each NAV_ITEMS as item (item.href)}
-					<li>
-						<a href={item.href} class:active={isActive(item.href)}>
-							<Icon name={item.icon} />
-							<span>{item.label}</span>
-						</a>
-					</li>
+			<div class="nav-groups">
+				{#each NAV_GROUPS as group (group.label)}
+					<div class="nav-group">
+						<p class="group-label">{group.label}</p>
+						<ul>
+							{#each group.items as item (item.href)}
+								<li>
+									{#if item.pending}
+										<span class="nav-link is-pending" title="Llega en la {item.pending}">
+											<Icon name={item.icon} />
+											<span class="nav-label">{item.label}</span>
+											<span class="nav-phase">{item.pending}</span>
+										</span>
+									{:else}
+										<a
+											href={item.href}
+											class="nav-link"
+											class:active={isActive(item.href, page.url.pathname)}
+											aria-current={isActive(item.href, page.url.pathname) ? 'page' : undefined}
+											title={item.label}
+										>
+											<Icon name={item.icon} />
+											<span class="nav-label">{item.label}</span>
+										</a>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					</div>
 				{/each}
-			</ul>
+			</div>
 
 			<div class="sidebar-footer">
 				<div class="user-info">
@@ -77,7 +86,7 @@
 				</div>
 				<button type="button" class="logout" onclick={handleLogout}>
 					<Icon name="logout" size={18} />
-					Cerrar sesión
+					<span class="nav-label">Cerrar sesión</span>
 				</button>
 			</div>
 		</nav>
@@ -95,90 +104,143 @@
 
 <style>
 	.loading {
-		padding: 2rem;
+		padding: var(--space-6);
 	}
 
 	.shell {
 		display: flex;
+		align-items: flex-start;
 		min-height: 100vh;
 	}
 
+	/* Pegada al viewport: antes se iba con el scroll y en una pantalla larga
+	   (catálogo, cocina) la navegación desaparecía. */
 	.sidebar {
+		position: sticky;
+		top: 0;
 		width: 240px;
 		flex-shrink: 0;
+		height: 100vh;
+		overflow-y: auto;
 		background: var(--color-surface);
 		border-right: 1px solid var(--color-border);
 		display: flex;
 		flex-direction: column;
-		padding: 1.25rem 1rem;
+		gap: var(--space-5);
+		padding: var(--space-5) var(--space-4);
 	}
 
 	.brand {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		font-family: var(--font-display);
 		font-weight: 700;
-		font-size: 1.25rem;
+		font-size: var(--text-xl);
 		color: var(--color-primary);
-		padding: 0 0.5rem 1.5rem;
+		padding: 0 var(--space-2);
 	}
 
-	.nav-list {
+	.nav-groups {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
-		flex: 1;
+		gap: var(--space-5);
 	}
 
-	.nav-list a {
+	.nav-group ul {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.group-label {
+		margin: 0 0 var(--space-2);
+		padding: 0 var(--space-3);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+
+	.nav-link {
 		display: flex;
 		align-items: center;
-		gap: 0.65rem;
-		padding: 0.55rem 0.75rem;
+		gap: var(--space-3);
+		min-height: var(--touch-min);
+		padding: 0 var(--space-3);
 		border-radius: var(--radius-sm);
 		color: var(--color-text-muted);
 		text-decoration: none;
 		font-weight: 500;
 	}
 
-	.nav-list a:hover {
+	a.nav-link:hover {
 		background: var(--color-primary-tint);
 		color: var(--color-text);
 	}
 
-	.nav-list a.active {
+	a.nav-link.active {
 		background: var(--color-primary-tint);
 		color: var(--color-primary);
+		font-weight: 600;
+	}
+
+	a.nav-link:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: -2px;
+	}
+
+	/* Entradas del plan que todavía no tienen pantalla: se ven, no navegan. */
+	.nav-link.is-pending {
+		opacity: 0.45;
+		cursor: default;
+	}
+
+	.nav-label {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.nav-phase {
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--color-text-muted);
 	}
 
 	.sidebar-footer {
 		border-top: 1px solid var(--color-border);
-		padding-top: 0.75rem;
+		padding-top: var(--space-3);
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
 	.user-info {
 		display: flex;
 		flex-direction: column;
-		padding: 0 0.5rem;
+		padding: 0 var(--space-2);
+		min-width: 0;
 	}
 
 	.user-name {
 		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.branch-name {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--color-text-muted);
 	}
 
 	.logout {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
+		min-height: var(--control-h-md);
 		background: transparent;
 		color: var(--color-text-muted);
 		border: 1px solid var(--color-border);
@@ -191,7 +253,57 @@
 
 	.content {
 		flex: 1;
-		padding: 2rem;
+		padding: var(--space-6);
 		min-width: 0;
+	}
+
+	/* Por debajo de 900px la barra se reduce a iconos: mantiene la navegación
+	   siempre visible sin robarle la mitad del ancho a una tableta. */
+	@media (max-width: 900px) {
+		.sidebar {
+			width: 68px;
+			padding: var(--space-4) var(--space-2);
+			align-items: center;
+		}
+
+		/* Los rótulos se ocultan a la vista, no al lector de pantalla: con
+		   `display: none` la barra colapsada se quedaría sin nombres y cada
+		   entrada sería un icono mudo. */
+		.brand-name,
+		.nav-label,
+		.nav-phase,
+		.group-label,
+		.user-info {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
+		}
+
+		.nav-link,
+		.logout {
+			justify-content: center;
+			padding: 0;
+		}
+
+		.nav-group + .nav-group {
+			border-top: 1px solid var(--color-border);
+			padding-top: var(--space-3);
+		}
+
+		.nav-groups {
+			gap: var(--space-3);
+			width: 100%;
+		}
+
+		.sidebar-footer {
+			width: 100%;
+		}
+
+		.content {
+			padding: var(--space-4);
+		}
 	}
 </style>

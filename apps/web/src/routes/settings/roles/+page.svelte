@@ -89,7 +89,7 @@
 	});
 </script>
 
-<main>
+<div class="page">
 	<h1>Roles y permisos</h1>
 
 	{#if error}
@@ -135,4 +135,4 @@
 			</section>
 		{/if}
 	{/if}
-</main>
+</div>

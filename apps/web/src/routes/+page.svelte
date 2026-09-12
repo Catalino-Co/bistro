@@ -14,7 +14,7 @@
 </script>
 
 {#if session.user}
-	<main>
+	<div class="page">
 		<h1>Bistro</h1>
 
 		{#if session.currentBranch}
@@ -42,5 +42,5 @@
 				</ul>
 			</section>
 		{/if}
-	</main>
+	</div>
 {/if}

@@ -301,7 +301,7 @@
 	});
 </script>
 
-<main>
+<div class="page">
 	<h1>Catálogo</h1>
 
 	<section>
@@ -452,4 +452,4 @@
 			{/if}
 		</section>
 	{/if}
-</main>
+</div>

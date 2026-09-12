@@ -222,7 +222,7 @@
 	});
 </script>
 
-<main>
+<div class="page">
 	<h1>Mesas y áreas</h1>
 
 	{#if noBranchSelected}
@@ -347,4 +347,4 @@
 			</section>
 		{/if}
 	{/if}
-</main>
+</div>
