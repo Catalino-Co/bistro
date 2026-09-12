@@ -92,6 +92,13 @@
       "when": 1789213641227,
       "tag": "0012_heavy_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789217496058,
+      "tag": "0013_goofy_boom_boom",
+      "breakpoints": true
     }
   ]
 }

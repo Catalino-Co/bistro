@@ -30,9 +30,15 @@
 		voidedAt: string | null;
 		modifiers: { modifierId: number; name: string; priceDelta: string }[];
 	}
+	interface Totals {
+		subtotal: string;
+		taxTotal: string;
+		total: string;
+	}
 
 	let items = $state<Item[]>([]);
 	let lines = $state<OrderLine[]>([]);
+	let totals = $state<Totals | null>(null);
 	let closed = $state(false);
 
 	let selectedItemId = $state<number | null>(null);
@@ -66,6 +72,17 @@
 		if (response.ok) {
 			lines = ((await response.json()) as { lines: OrderLine[] }).lines;
 		}
+	}
+
+	async function loadTotals() {
+		const response = await apiFetch(`/orders/${orderId}/totals`);
+		if (response.ok) {
+			totals = (await response.json()) as Totals;
+		}
+	}
+
+	async function refresh() {
+		await Promise.all([loadLines(), loadTotals()]);
 	}
 
 	async function selectItem(itemId: number) {
@@ -134,7 +151,7 @@
 					});
 		if (response.ok) {
 			resetForm();
-			await loadLines();
+			await refresh();
 		} else {
 			const body = (await response.json()) as { error: string };
 			errorMessage = body.error;
@@ -149,7 +166,7 @@
 		});
 		if (response.ok) {
 			if (editingLineId === lineId) resetForm();
-			await loadLines();
+			await refresh();
 		} else {
 			const body = (await response.json()) as { error: string };
 			errorMessage = body.error;
@@ -166,7 +183,7 @@
 
 	$effect(() => {
 		loadItems();
-		loadLines();
+		refresh();
 	});
 </script>
 
@@ -202,6 +219,16 @@
 					</li>
 				{/each}
 			</ul>
+		{/if}
+		{#if totals}
+			<dl class="totals">
+				<dt>Subtotal</dt>
+				<dd>RD$ {Number(totals.subtotal).toFixed(2)}</dd>
+				<dt>ITBIS</dt>
+				<dd>RD$ {Number(totals.taxTotal).toFixed(2)}</dd>
+				<dt>Total</dt>
+				<dd>RD$ {Number(totals.total).toFixed(2)}</dd>
+			</dl>
 		{/if}
 	</section>
 
@@ -262,5 +289,22 @@
 	}
 	.voided-tag {
 		font-style: italic;
+	}
+	.totals {
+		display: grid;
+		grid-template-columns: max-content max-content;
+		gap: 0.25rem 1rem;
+		max-width: 16rem;
+	}
+	.totals dt {
+		font-weight: normal;
+	}
+	.totals dd {
+		margin: 0;
+		text-align: right;
+	}
+	.totals dt:last-of-type,
+	.totals dd:last-of-type {
+		font-weight: bold;
 	}
 </style>

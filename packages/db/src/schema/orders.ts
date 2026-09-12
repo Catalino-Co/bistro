@@ -1,4 +1,4 @@
-import { bigint, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, numeric, timestamp } from 'drizzle-orm/pg-core';
 import { bistro } from './_shared.js';
 import { branches } from './org.js';
 import { customers } from './customers.js';
@@ -35,4 +35,11 @@ export const orders = bistro.table('orders', {
   customerId: bigint('customer_id', { mode: 'number' }).references(() => customers.id),
   openedAt: timestamp('opened_at', { withTimezone: true }).notNull().defaultNow(),
   closedAt: timestamp('closed_at', { withTimezone: true }),
+  // Frozen at close time, from each line's own snapshot unit_price/price_delta
+  // and its item's tax rate at that moment -- same reasoning as order_lines
+  // snapshotting unit_price: a later tax_rates change shouldn't retroactively
+  // change what a closed (billed) order shows as its total. Null until closed.
+  subtotal: numeric('subtotal', { precision: 12, scale: 4 }),
+  taxTotal: numeric('tax_total', { precision: 12, scale: 4 }),
+  total: numeric('total', { precision: 12, scale: 4 }),
 });

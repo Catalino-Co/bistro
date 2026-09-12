@@ -3,6 +3,7 @@ import {
   addOrderLine,
   closeOrder,
   findOpenOrderForTable,
+  getOrderTotals,
   listOrderLines,
   openOrder,
   updateOrderLine,
@@ -104,6 +105,25 @@ export async function ordersRoutes(app: FastifyInstance) {
       }
       const orderId = Number((request.params as { id: string }).id);
       return { lines: await listOrderLines(branchId, orderId) };
+    },
+  );
+
+  app.get(
+    '/orders/:id/totals',
+    { config: { permissions: [...MANAGE_ORDERS] } },
+    async (request, reply) => {
+      const branchId = request.session.branchId;
+      if (typeof branchId !== 'number') {
+        reply.code(409);
+        return { error: 'no_branch_selected' };
+      }
+      const orderId = Number((request.params as { id: string }).id);
+      const result = await getOrderTotals(branchId, orderId);
+      if (result.outcome === 'order_not_found') {
+        reply.code(404);
+        return { error: 'order_not_found' };
+      }
+      return result.totals;
     },
   );
 
