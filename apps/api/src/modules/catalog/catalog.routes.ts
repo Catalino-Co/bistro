@@ -8,6 +8,7 @@ import {
   listCategories,
   listFamilies,
   listItems,
+  listItemsWithCategory,
   listKitchenStations,
   listSubfamilies,
   listTaxRates,
@@ -103,6 +104,14 @@ export async function catalogRoutes(app: FastifyInstance) {
     const { subfamilyId } = request.query as { subfamilyId?: string };
     return { items: await listItems(subfamilyId ? Number(subfamilyId) : undefined) };
   });
+
+  // Flat item list with each one's category name joined in, for the POS
+  // picker to group by category in a single request.
+  app.get(
+    '/catalog/items/full',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async () => ({ items: await listItemsWithCategory() }),
+  );
 
   app.post(
     '/catalog/items',

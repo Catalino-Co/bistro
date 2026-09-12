@@ -110,6 +110,33 @@ export async function listItems(subfamilyId?: number): Promise<ItemRow[]> {
   return subfamilyId !== undefined ? query.where(eq(schema.items.subfamilyId, subfamilyId)) : query;
 }
 
+export interface ItemWithCategoryRow extends ItemRow {
+  categoryId: number;
+  categoryName: string;
+}
+
+// Joins up to the category so the POS can group its item picker without
+// an N+1 fetch per category/family/subfamily -- additive alongside
+// listItems (which stays as-is for admin/catalog's drill-down browsing).
+export async function listItemsWithCategory(): Promise<ItemWithCategoryRow[]> {
+  return db
+    .select({
+      id: schema.items.id,
+      subfamilyId: schema.items.subfamilyId,
+      name: schema.items.name,
+      price: schema.items.price,
+      taxRateId: schema.items.taxRateId,
+      stationId: schema.items.stationId,
+      status: schema.items.status,
+      categoryId: schema.categories.id,
+      categoryName: schema.categories.name,
+    })
+    .from(schema.items)
+    .innerJoin(schema.subfamilies, eq(schema.subfamilies.id, schema.items.subfamilyId))
+    .innerJoin(schema.families, eq(schema.families.id, schema.subfamilies.familyId))
+    .innerJoin(schema.categories, eq(schema.categories.id, schema.families.categoryId));
+}
+
 export async function createItem(
   subfamilyId: number,
   name: string,

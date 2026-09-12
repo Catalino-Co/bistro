@@ -103,6 +103,17 @@ describe('catalog routes', () => {
       (i) => i.name,
     );
     expect(itemNames).toEqual(['__catalog_test_item__']);
+
+    const fullItems = await app.inject({
+      method: 'GET',
+      url: '/catalog/items/full',
+      headers: { cookie },
+    });
+    expect(fullItems.statusCode).toBe(200);
+    const fullItem = (
+      fullItems.json() as { items: { name: string; categoryId: number; categoryName: string }[] }
+    ).items.find((i) => i.name === '__catalog_test_item__');
+    expect(fullItem).toMatchObject({ categoryId, categoryName: '__catalog_test_category__' });
   });
 
   it('creates a kitchen station and routes an item to it', async () => {
