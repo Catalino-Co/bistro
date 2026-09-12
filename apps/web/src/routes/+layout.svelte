@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import favicon from '$lib/assets/favicon.svg';
 	import Icon from '$lib/components/Icon.svelte';
+	import Toast from '$lib/components/Toast.svelte';
 	import { session } from '$lib/session.svelte.js';
 	import '$lib/styles/tokens.css';
 
@@ -88,6 +89,9 @@
 {:else}
 	{@render children()}
 {/if}
+
+<!-- Único punto de montaje de los avisos: toda la app escribe en el store. -->
+<Toast />
 
 <style>
 	.loading {
