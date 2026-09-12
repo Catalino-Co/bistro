@@ -1,6 +1,6 @@
 import { db, schema } from '@bistro/db';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { calculateOrderTotals } from './totals.js';
+import { and, eq } from 'drizzle-orm';
+import { summarizeOrders } from './order-totals.repo.js';
 
 export interface TableMapOrder {
   id: number;
@@ -28,16 +28,12 @@ export interface TableMapArea {
 }
 
 /**
- * El mapa de mesas de una sucursal, con la orden abierta y su total en
- * cuatro consultas fijas -- no una por mesa.
+ * El mapa de mesas de una sucursal, con la orden abierta y su total, en un
+ * número fijo de consultas -- no una por mesa.
  *
- * La alternativa obvia (listar mesas y luego pedir el total de cada una con
- * computeOrderTotals) hace una consulta por orden abierta, y esta pantalla
- * se refresca sola durante el servicio. Aquí se traen todas las líneas de
- * todas las órdenes abiertas de golpe y se agrupan en memoria, pero el
- * cálculo sigue pasando por `calculateOrderTotals`: es la misma función
- * pura que usa el cierre de orden, así que el total del mapa nunca puede
- * divergir del que se cobra.
+ * La alternativa obvia (listar mesas y luego pedir el total de cada una)
+ * hace una consulta por orden abierta, y esta pantalla se refresca sola
+ * durante el servicio.
  */
 export async function getTableMap(branchId: number): Promise<TableMapArea[]> {
   const tableRows = await db
@@ -63,68 +59,21 @@ export async function getTableMap(branchId: number): Promise<TableMapArea[]> {
     .from(schema.orders)
     .where(and(eq(schema.orders.branchId, branchId), eq(schema.orders.status, 'open')));
 
-  const orderIds = orderRows.map((row) => row.id);
-  const lineRows =
-    orderIds.length === 0
-      ? []
-      : await db
-          .select({
-            id: schema.orderLines.id,
-            orderId: schema.orderLines.orderId,
-            quantity: schema.orderLines.quantity,
-            unitPrice: schema.orderLines.unitPrice,
-            sentToKitchenAt: schema.orderLines.sentToKitchenAt,
-            taxRate: schema.taxRates.rate,
-          })
-          .from(schema.orderLines)
-          .innerJoin(schema.items, eq(schema.items.id, schema.orderLines.itemId))
-          .innerJoin(schema.taxRates, eq(schema.taxRates.id, schema.items.taxRateId))
-          .where(
-            and(inArray(schema.orderLines.orderId, orderIds), isNull(schema.orderLines.voidedAt)),
-          );
-
-  const lineIds = lineRows.map((row) => row.id);
-  const modifierDeltasByLine = new Map<number, number[]>();
-  if (lineIds.length > 0) {
-    const modifierRows = await db
-      .select({
-        orderLineId: schema.orderLineModifiers.orderLineId,
-        priceDelta: schema.orderLineModifiers.priceDelta,
-      })
-      .from(schema.orderLineModifiers)
-      .where(inArray(schema.orderLineModifiers.orderLineId, lineIds));
-    for (const row of modifierRows) {
-      const existing = modifierDeltasByLine.get(row.orderLineId) ?? [];
-      existing.push(Number(row.priceDelta));
-      modifierDeltasByLine.set(row.orderLineId, existing);
-    }
-  }
-
-  const linesByOrder = new Map<number, typeof lineRows>();
-  for (const row of lineRows) {
-    const existing = linesByOrder.get(row.orderId) ?? [];
-    existing.push(row);
-    linesByOrder.set(row.orderId, existing);
-  }
+  const summaries = await summarizeOrders(
+    db,
+    orderRows.map((row) => row.id),
+  );
 
   const orderByTableId = new Map<number, TableMapOrder>();
   for (const order of orderRows) {
-    const lines = linesByOrder.get(order.id) ?? [];
-    const totals = calculateOrderTotals(
-      lines.map((line) => ({
-        unitPrice: Number(line.unitPrice),
-        quantity: line.quantity,
-        modifierPriceDeltas: modifierDeltasByLine.get(line.id) ?? [],
-        taxRate: Number(line.taxRate),
-      })),
-    );
+    const summary = summaries.get(order.id);
     orderByTableId.set(order.dineTableId, {
       id: order.id,
       openedAt: order.openedAt.toISOString(),
       dispatchMode: order.dispatchMode,
-      total: totals.total.toFixed(4),
-      lineCount: lines.length,
-      pendingToSend: lines.filter((line) => line.sentToKitchenAt === null).length,
+      total: (summary?.total ?? 0).toFixed(4),
+      lineCount: summary?.lineCount ?? 0,
+      pendingToSend: summary?.pendingToSend ?? 0,
     });
   }
 

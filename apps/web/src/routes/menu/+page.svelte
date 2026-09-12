@@ -490,6 +490,7 @@
 						{#each [['datos', 'Datos'], ['modificadores', 'Modificadores'], ['estacion', 'Estación']] as tab (tab[0])}
 							<button
 								type="button"
+								data-unstyled
 								role="tab"
 								class="panel-tab"
 								class:active={detailTab === tab[0]}

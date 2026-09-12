@@ -65,12 +65,22 @@ export async function findOpenOrderForTable(
 export interface OrderDetail extends OrderRow {
   dineTableName: string;
   customerName: string | null;
+  openedAt: string;
+  closedAt: string | null;
+  // Congelados al cerrar; null mientras la orden sigue abierta, en cuyo
+  // caso el total en vivo se pide a /orders/:id/totals.
+  subtotal: string | null;
+  taxTotal: string | null;
+  total: string | null;
 }
 
 // The POS screen's own header (which table, which dispatch mode, which
 // customer) -- dispatch mode and customer are fixed at open time (there's
 // no route to change them once set), so this is read-only by design.
-export async function getOrderDetail(branchId: number, orderId: number): Promise<OrderDetail | null> {
+export async function getOrderDetail(
+  branchId: number,
+  orderId: number,
+): Promise<OrderDetail | null> {
   const [row] = await db
     .select({
       id: schema.orders.id,
@@ -81,12 +91,24 @@ export async function getOrderDetail(branchId: number, orderId: number): Promise
       customerId: schema.orders.customerId,
       dineTableName: schema.dineTables.name,
       customerName: schema.customers.name,
+      openedAt: schema.orders.openedAt,
+      closedAt: schema.orders.closedAt,
+      subtotal: schema.orders.subtotal,
+      taxTotal: schema.orders.taxTotal,
+      total: schema.orders.total,
     })
     .from(schema.orders)
     .innerJoin(schema.dineTables, eq(schema.dineTables.id, schema.orders.dineTableId))
     .leftJoin(schema.customers, eq(schema.customers.id, schema.orders.customerId))
     .where(and(eq(schema.orders.id, orderId), eq(schema.orders.branchId, branchId)));
-  return row ? { ...row, customerName: row.customerName ?? null } : null;
+  return row
+    ? {
+        ...row,
+        customerName: row.customerName ?? null,
+        openedAt: row.openedAt.toISOString(),
+        closedAt: row.closedAt?.toISOString() ?? null,
+      }
+    : null;
 }
 
 // Opening an order and occupying its table must happen atomically -- a
@@ -222,6 +244,15 @@ export interface OrderLineRow {
   modifiers: OrderLineModifierRow[];
 }
 
+// Lo que devuelve la lectura de una cuenta. El nombre del ítem viaja con
+// la línea para que leerla no exija permiso de catálogo: un cajero tiene
+// orders.manage, no catalog.manage, y aun así tiene que poder ver qué se
+// consumió. Las escrituras siguen devolviendo OrderLineRow a secas -- la
+// pantalla recarga la cuenta después de cada cambio.
+export interface OrderLineDetail extends OrderLineRow {
+  itemName: string;
+}
+
 export type AddOrderLineResult =
   | { outcome: 'added'; line: OrderLineRow }
   | { outcome: 'order_not_found' }
@@ -326,7 +357,10 @@ export async function addOrderLine(
   });
 }
 
-export async function listOrderLines(branchId: number, orderId: number): Promise<OrderLineRow[]> {
+export async function listOrderLines(
+  branchId: number,
+  orderId: number,
+): Promise<OrderLineDetail[]> {
   const [order] = await db
     .select({ id: schema.orders.id })
     .from(schema.orders)
@@ -340,6 +374,7 @@ export async function listOrderLines(branchId: number, orderId: number): Promise
       id: schema.orderLines.id,
       orderId: schema.orderLines.orderId,
       itemId: schema.orderLines.itemId,
+      itemName: schema.items.name,
       quantity: schema.orderLines.quantity,
       note: schema.orderLines.note,
       unitPrice: schema.orderLines.unitPrice,
@@ -348,6 +383,7 @@ export async function listOrderLines(branchId: number, orderId: number): Promise
       preparedAt: schema.orderLines.preparedAt,
     })
     .from(schema.orderLines)
+    .innerJoin(schema.items, eq(schema.items.id, schema.orderLines.itemId))
     .where(eq(schema.orderLines.orderId, orderId));
 
   const lineIds = lines.map((l) => l.id);
@@ -680,7 +716,12 @@ export interface SentLineRow {
 }
 
 export type SendToKitchenResult =
-  | { outcome: 'sent'; dineTableName: string; lines: SentLineRow[]; printResults: PrintStationResult[] }
+  | {
+      outcome: 'sent';
+      dineTableName: string;
+      lines: SentLineRow[];
+      printResults: PrintStationResult[];
+    }
   | { outcome: 'order_not_found' }
   | { outcome: 'order_closed' };
 

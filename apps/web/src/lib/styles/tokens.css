@@ -155,10 +155,14 @@ textarea:focus {
 }
 
 /* Los defaults de `button` de abajo son el estilo heredado de las pantallas
-   que todavía no migran al sistema de componentes. Todo lo que lleva la
-   clase `.btn` queda excluido: ese es el territorio de Button.svelte, que
-   define sus variantes completas y no debe pelear con estas reglas. */
-button:not(.btn) {
+   que todavía no migran al sistema de componentes. Dos cosas quedan fuera:
+   la clase `.btn`, territorio de Button.svelte, y `data-unstyled`, para un
+   botón que trae su propio aspecto y no debe recibir nada de aquí (una
+   pestaña, por ejemplo).
+   Hace falta marcarlo explícitamente porque estos selectores son más
+   específicos que cualquier clase con ámbito de componente, así que sin el
+   `:not()` ganan ellos y la pestaña acaba pareciendo un botón gris. */
+button:not(.btn):not([data-unstyled]) {
   font: inherit;
   font-weight: 600;
   color: var(--color-surface);
@@ -172,22 +176,22 @@ button:not(.btn) {
     opacity 0.15s ease;
 }
 
-button:not(.btn):hover:not(:disabled) {
+button:not(.btn):not([data-unstyled]):hover:not(:disabled) {
   background: var(--color-primary-hover);
 }
 
-button:not(.btn):disabled {
+button:not(.btn):not([data-unstyled]):disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-button[type='button']:not(.btn):not(.btn-primary) {
+button[type='button']:not(.btn):not([data-unstyled]):not(.btn-primary) {
   background: var(--color-surface);
   color: var(--color-text);
   border: 1px solid var(--color-border);
 }
 
-button[type='button']:not(.btn):not(.btn-primary):hover:not(:disabled) {
+button[type='button']:not(.btn):not([data-unstyled]):not(.btn-primary):hover:not(:disabled) {
   background: var(--color-primary-tint);
 }
 

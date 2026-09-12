@@ -22,3 +22,14 @@ export const updateOrderLineBodySchema = z.object({
 export const voidOrderLineBodySchema = z.object({
   reason: z.string().max(500).optional(),
 });
+
+// Filtros del historial. `from`/`to` llegan como instantes ISO calculados
+// por el cliente, que es quien sabe en qué zona horaria está "hoy" para
+// quien mira la pantalla.
+export const listOrdersQuerySchema = z.object({
+  status: z.enum(['open', 'closed']).optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  search: z.string().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});

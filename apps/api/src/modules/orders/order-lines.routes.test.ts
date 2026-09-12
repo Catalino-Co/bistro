@@ -183,8 +183,9 @@ describe('update and void order lines', () => {
     itemId = (await createItemFixture('uv-main', taxRateId)).itemId;
     const unrelatedItemId = (await createItemFixture('uv-unrelated', taxRateId)).itemId;
     modifierId = (await createModifierFixture('uv-extra', itemId, '25.0000')).modifierId;
-    unrelatedModifierId = (await createModifierFixture('uv-unrelated-mod', unrelatedItemId, '10.0000'))
-      .modifierId;
+    unrelatedModifierId = (
+      await createModifierFixture('uv-unrelated-mod', unrelatedItemId, '10.0000')
+    ).modifierId;
     cashMethodId = await findPaymentMethodIdByName('Efectivo');
 
     const dineAreaId = (await createDineArea(branch.branchId, '__order_lines_test_area_uv__')).id;

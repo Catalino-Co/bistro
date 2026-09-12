@@ -131,7 +131,9 @@ describe('send order lines to the kitchen', () => {
     // The routed item's station has no printer configured yet -- printing
     // is attempted but reported as skipped, not silently omitted.
     const printResults = (send.json() as { printResults: PrintResult[] }).printResults;
-    expect(printResults).toEqual([{ stationId, stationName: expect.any(String), outcome: 'no_printer_configured' }]);
+    expect(printResults).toEqual([
+      { stationId, stationName: expect.any(String), outcome: 'no_printer_configured' },
+    ]);
 
     const lines = await app.inject({
       method: 'GET',
@@ -139,10 +141,9 @@ describe('send order lines to the kitchen', () => {
       headers: { cookie },
     });
     const sentAtById = new Map(
-      (lines.json() as { lines: { id: number; sentToKitchenAt: string | null }[] }).lines.map((l) => [
-        l.id,
-        l.sentToKitchenAt,
-      ]),
+      (lines.json() as { lines: { id: number; sentToKitchenAt: string | null }[] }).lines.map(
+        (l) => [l.id, l.sentToKitchenAt],
+      ),
     );
     expect(sentAtById.get(routedLineId)).not.toBeNull();
     expect(sentAtById.get(unroutedLineId)).not.toBeNull();

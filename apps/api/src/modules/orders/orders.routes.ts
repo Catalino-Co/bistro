@@ -15,8 +15,10 @@ import {
   addOrderLineBodySchema,
   openOrderBodySchema,
   updateOrderLineBodySchema,
+  listOrdersQuerySchema,
   voidOrderLineBodySchema,
 } from './orders.schema.js';
+import { listOrders } from './orders.history.repo.js';
 import { getTableMap } from './table-map.repo.js';
 
 const MANAGE_ORDERS = ['orders.manage'] as const;
@@ -41,6 +43,31 @@ export async function ordersRoutes(app: FastifyInstance) {
       return { areas: await getTableMap(branchId) };
     },
   );
+
+  // El historial. Antes de esto una orden cerrada desaparecía del alcance
+  // de la interfaz: los datos estaban, pero no había ruta que los listara.
+  app.get('/orders', { config: { permissions: [...MANAGE_ORDERS] } }, async (request, reply) => {
+    const branchId = request.session.branchId;
+    if (typeof branchId !== 'number') {
+      reply.code(409);
+      return { error: 'no_branch_selected' };
+    }
+    const parsed = listOrdersQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      reply.code(400);
+      return { error: 'invalid_request' };
+    }
+    const { status, from, to, search, limit } = parsed.data;
+    return {
+      orders: await listOrders(branchId, {
+        status,
+        from: from ? new Date(from) : undefined,
+        to: to ? new Date(to) : undefined,
+        search,
+        limit,
+      }),
+    };
+  });
 
   app.post('/orders', { config: { permissions: [...MANAGE_ORDERS] } }, async (request, reply) => {
     const branchId = request.session.branchId;
