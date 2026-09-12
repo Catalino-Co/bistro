@@ -116,6 +116,50 @@ export async function sweepTestData(): Promise<void> {
     ),
   );
 
+  // Salón y órdenes de las sucursales de prueba. Cada suite ya limpia lo
+  // suyo en su afterAll (deleteBranchFixture), pero si ese afterAll revienta
+  // a mitad -- y revienta, en cuanto alguien se equivoca de orden -- la
+  // sucursal se queda con áreas colgando y el delete de branches de abajo
+  // choca contra la FK. Eso deja la base bloqueada para TODAS las corridas
+  // siguientes, incluida la que vendría a arreglarlo. Aquí se despeja el
+  // camino, que es justo lo que este sweep promete en su comentario de
+  // cabecera. Todo por id: nada de patrones con comodín.
+  if (branchIds.length > 0) {
+    const orderIds = await idsWhere(
+      db
+        .select({ id: schema.orders.id })
+        .from(schema.orders)
+        .where(inArray(schema.orders.branchId, branchIds)),
+    );
+    if (orderIds.length > 0) {
+      await db.delete(schema.payments).where(inArray(schema.payments.orderId, orderIds));
+      const lineIds = await idsWhere(
+        db
+          .select({ id: schema.orderLines.id })
+          .from(schema.orderLines)
+          .where(inArray(schema.orderLines.orderId, orderIds)),
+      );
+      if (lineIds.length > 0) {
+        await db
+          .delete(schema.orderLineModifiers)
+          .where(inArray(schema.orderLineModifiers.orderLineId, lineIds));
+        await db.delete(schema.orderLines).where(inArray(schema.orderLines.id, lineIds));
+      }
+      await db.delete(schema.orders).where(inArray(schema.orders.id, orderIds));
+    }
+
+    const areaIds = await idsWhere(
+      db
+        .select({ id: schema.dineAreas.id })
+        .from(schema.dineAreas)
+        .where(inArray(schema.dineAreas.branchId, branchIds)),
+    );
+    if (areaIds.length > 0) {
+      await db.delete(schema.dineTables).where(inArray(schema.dineTables.dineAreaId, areaIds));
+      await db.delete(schema.dineAreas).where(inArray(schema.dineAreas.id, areaIds));
+    }
+  }
+
   await db.delete(schema.users).where(like(schema.users.username, TEST_PATTERN));
   await db.delete(schema.branches).where(like(schema.branches.name, TEST_PATTERN));
   await db.delete(schema.businessUnits).where(like(schema.businessUnits.name, TEST_PATTERN));

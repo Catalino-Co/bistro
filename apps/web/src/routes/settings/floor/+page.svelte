@@ -15,6 +15,9 @@
 	import { DINE_TABLE_STATUS, statusLabel } from '$lib/status.js';
 	import { toasts } from '$lib/toasts.svelte.js';
 
+	// Esta pantalla configura el salón; abrir y cobrar órdenes es trabajo del
+	// POS (/pos). Antes ambas cosas convivían aquí porque no había mapa de
+	// mesas, y se abría una orden desde la pantalla de Ajustes.
 	interface DineArea {
 		id: number;
 		name: string;
@@ -25,57 +28,24 @@
 		seats: number;
 		status: string;
 	}
-	interface CustomerType {
-		id: number;
-		name: string;
-		allowsRoomService: boolean;
-	}
-	interface Customer {
-		id: number;
-		name: string;
-		customerTypeName: string;
-		allowsRoomService: boolean;
-	}
-	type DispatchMode = 'dine_in' | 'delivery' | 'pickup' | 'room_service';
-
-	const DISPATCH_MODES: { value: DispatchMode; label: string }[] = [
-		{ value: 'dine_in', label: 'En mesa' },
-		{ value: 'delivery', label: 'Delivery' },
-		{ value: 'pickup', label: 'Pickup' },
-		{ value: 'room_service', label: 'Room service' },
-	];
 
 	let dineAreas = $state<DineArea[]>([]);
 	let tables = $state<DineTable[]>([]);
 	let selectedAreaId = $state<number | null>(null);
 	let noBranchSelected = $state(false);
-	let customerTypes = $state<CustomerType[]>([]);
 
-	// --- alta y edición de áreas ---
 	let areaFormOpen = $state(false);
 	let editingAreaId = $state<number | null>(null);
 	let areaName = $state('');
 	let savingArea = $state(false);
 	let areaToDelete = $state<DineArea | null>(null);
 
-	// --- alta y edición de mesas ---
 	let tableFormOpen = $state(false);
 	let editingTableId = $state<number | null>(null);
 	let tableName = $state('');
 	let tableSeats = $state('4');
 	let savingTable = $state(false);
 	let tableToDelete = $state<DineTable | null>(null);
-
-	// --- apertura de orden ---
-	let openingTable = $state<DineTable | null>(null);
-	let openingDispatchMode = $state<DispatchMode>('dine_in');
-	let customerSearch = $state('');
-	let customerResults = $state<Customer[]>([]);
-	let selectedCustomerId = $state<number | null>(null);
-	let newCustomerName = $state('');
-	let newCustomerTypeId = $state<number | null>(null);
-	let openOrderError = $state('');
-	let openingOrder = $state(false);
 
 	const selectedArea = $derived(dineAreas.find((area) => area.id === selectedAreaId) ?? null);
 
@@ -207,109 +177,18 @@
 		toasts.success(`Mesa «${table.name}» eliminada.`);
 	}
 
-	async function loadCustomerTypes() {
-		const response = await apiFetch('/customer-types');
-		if (response.ok) {
-			customerTypes = ((await response.json()) as { customerTypes: CustomerType[] }).customerTypes;
-			if (newCustomerTypeId === null && customerTypes.length > 0) {
-				newCustomerTypeId =
-					customerTypes.find((t) => t.allowsRoomService)?.id ?? customerTypes[0]!.id;
-			}
-		}
-	}
-
-	function startOpenOrder(table: DineTable) {
-		openingTable = table;
-		openingDispatchMode = 'dine_in';
-		customerSearch = '';
-		customerResults = [];
-		selectedCustomerId = null;
-		newCustomerName = '';
-		openOrderError = '';
-	}
-
-	async function searchCustomers() {
-		if (!customerSearch.trim()) {
-			customerResults = [];
-			return;
-		}
-		const response = await apiFetch(
-			`/customers?search=${encodeURIComponent(customerSearch.trim())}`,
-		);
-		if (response.ok) {
-			customerResults = ((await response.json()) as { customers: Customer[] }).customers;
-		}
-	}
-
-	async function quickAddCustomer() {
-		const name = newCustomerName.trim();
-		if (!name || newCustomerTypeId === null) return;
-		const response = await apiFetch('/customers', {
-			method: 'POST',
-			body: JSON.stringify({ customerTypeId: newCustomerTypeId, name }),
-		});
-		if (!response.ok) {
-			toasts.error(await apiErrorMessage(response, 'No se pudo crear el huésped.'));
-			return;
-		}
-		const { customer } = (await response.json()) as { customer: Customer };
-		selectedCustomerId = customer.id;
-		customerResults = [customer];
-		newCustomerName = '';
-		toasts.success(`Huésped «${customer.name}» creado y seleccionado.`);
-	}
-
-	async function confirmOpenOrder() {
-		if (!openingTable) return;
-		openOrderError = '';
-		openingOrder = true;
-		try {
-			const response = await apiFetch('/orders', {
-				method: 'POST',
-				body: JSON.stringify({
-					dineTableId: openingTable.id,
-					dispatchMode: openingDispatchMode,
-					customerId:
-						openingDispatchMode === 'room_service' ? (selectedCustomerId ?? undefined) : undefined,
-				}),
-			});
-			if (!response.ok) {
-				openOrderError = await apiErrorMessage(response, 'No se pudo abrir la orden.');
-				return;
-			}
-			const { order } = (await response.json()) as { order: { id: number } };
-			goto(`/pos/${order.id}`);
-		} finally {
-			openingOrder = false;
-		}
-	}
-
-	async function viewOrder(dineTableId: number) {
-		const response = await apiFetch(`/orders/for-table/${dineTableId}`);
-		if (!response.ok) {
-			toasts.error(await apiErrorMessage(response, 'No se pudo abrir la orden de la mesa.'));
-			return;
-		}
-		const { order } = (await response.json()) as { order: { id: number } | null };
-		if (order) {
-			goto(`/pos/${order.id}`);
-		} else {
-			toasts.info('Esa mesa ya no tiene una orden abierta.');
-		}
-	}
-
 	$effect(() => {
 		loadDineAreas();
-		loadCustomerTypes();
 	});
 </script>
 
 <PageHeader
 	title="Áreas y mesas"
-	description="El salón de {session.currentBranch?.name ?? 'la sucursal'}: primero las áreas, y dentro de cada una sus mesas."
+	description="El salón de {session.currentBranch?.name ?? 'la sucursal'}: primero las áreas, y dentro de cada una sus mesas. Para abrir o cobrar una orden, ve al POS."
 >
 	{#snippet actions()}
 		{#if !noBranchSelected}
+			<Button variant="ghost" icon="pos" onclick={() => goto('/pos')}>Ir al POS</Button>
 			<Button variant="primary" icon="plus" onclick={startCreateArea}>Nueva área</Button>
 		{/if}
 	{/snippet}
@@ -387,7 +266,7 @@
 					<EmptyState
 						icon="tables"
 						title="Esta área no tiene mesas"
-						description="Añade la primera para poder abrirle una orden."
+						description="Añade la primera para que aparezca en el mapa del POS."
 					>
 						{#snippet action()}
 							<Button variant="primary" icon="plus" onclick={startCreateTable}>Crear mesa</Button>
@@ -400,15 +279,6 @@
 							<DataListRow title={table.name} meta="{table.seats} puestos">
 								<Badge tone={status.tone}>{status.label}</Badge>
 								{#snippet actions()}
-									{#if table.status === 'available'}
-										<Button size="sm" variant="primary" onclick={() => startOpenOrder(table)}>
-											Abrir orden
-										</Button>
-									{:else if table.status === 'occupied'}
-										<Button size="sm" variant="secondary" onclick={() => viewOrder(table.id)}>
-											Ver orden
-										</Button>
-									{/if}
 									<Button
 										size="sm"
 										variant="ghost"
@@ -478,84 +348,6 @@
 	{/snippet}
 </Modal>
 
-<Modal
-	open={openingTable !== null}
-	title="Abrir orden"
-	description={openingTable?.name}
-	onclose={() => (openingTable = null)}
->
-	<Field label="Modo de despacho">
-		{#snippet control({ id })}
-			<select {id} bind:value={openingDispatchMode}>
-				{#each DISPATCH_MODES as mode (mode.value)}
-					<option value={mode.value}>{mode.label}</option>
-				{/each}
-			</select>
-		{/snippet}
-	</Field>
-
-	{#if openingDispatchMode === 'room_service'}
-		<Field
-			label="Buscar huésped"
-			type="search"
-			bind:value={customerSearch}
-			oninput={searchCustomers}
-			placeholder="Nombre del huésped"
-			hint="Room service exige un huésped cuyo tipo lo permita."
-		/>
-
-		{#if customerResults.length > 0}
-			<DataList>
-				{#each customerResults as customer (customer.id)}
-					<DataListRow
-						title={customer.name}
-						meta={customer.customerTypeName}
-						selected={customer.id === selectedCustomerId}
-						onclick={() => (selectedCustomerId = customer.id)}
-					>
-						{#if customer.id === selectedCustomerId}
-							<Badge tone="primary">Seleccionado</Badge>
-						{/if}
-					</DataListRow>
-				{/each}
-			</DataList>
-		{/if}
-
-		<fieldset class="quick-add">
-			<legend>¿No existe? Créalo</legend>
-			<Field label="Tipo de cliente">
-				{#snippet control({ id })}
-					<select {id} bind:value={newCustomerTypeId}>
-						{#each customerTypes as type (type.id)}
-							<option value={type.id}>{type.name}</option>
-						{/each}
-					</select>
-				{/snippet}
-			</Field>
-			<Field label="Nombre del huésped" bind:value={newCustomerName} />
-			<Button variant="secondary" icon="plus" onclick={quickAddCustomer}>Crear y usar</Button>
-		</fieldset>
-	{/if}
-
-	{#if openOrderError}
-		<p role="alert">{openOrderError}</p>
-	{/if}
-
-	{#snippet footer()}
-		<Button variant="ghost" disabled={openingOrder} onclick={() => (openingTable = null)}>
-			Cancelar
-		</Button>
-		<Button
-			variant="primary"
-			loading={openingOrder}
-			disabled={openingDispatchMode === 'room_service' && selectedCustomerId === null}
-			onclick={confirmOpenOrder}
-		>
-			Abrir orden
-		</Button>
-	{/snippet}
-</Modal>
-
 <ConfirmDialog
 	open={areaToDelete !== null}
 	title="¿Eliminar el área?"
@@ -600,22 +392,6 @@
 	h2 {
 		margin: 0;
 		font-size: var(--text-lg);
-	}
-
-	.quick-add {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-		align-items: flex-start;
-	}
-
-	legend {
-		padding: 0 var(--space-2);
-		font-size: var(--text-xs);
-		font-weight: 600;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--color-text-muted);
 	}
 
 	@media (max-width: 900px) {

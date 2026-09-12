@@ -17,12 +17,31 @@ import {
   updateOrderLineBodySchema,
   voidOrderLineBodySchema,
 } from './orders.schema.js';
+import { getTableMap } from './table-map.repo.js';
 
 const MANAGE_ORDERS = ['orders.manage'] as const;
 
 // Open/close lifecycle (B1-6) plus order-taking (B1-7): lines carry their
 // own quantity, note, and modifiers.
 export async function ordersRoutes(app: FastifyInstance) {
+  // El mapa de mesas del POS: áreas, mesas, y la orden abierta de cada una
+  // con su total en vivo. Existe como un endpoint propio porque la
+  // alternativa -- listar mesas y luego pedir /orders/for-table/:id por
+  // cada una -- son N llamadas para pintar una pantalla que se refresca
+  // sola durante el servicio.
+  app.get(
+    '/orders/table-map',
+    { config: { permissions: [...MANAGE_ORDERS] } },
+    async (request, reply) => {
+      const branchId = request.session.branchId;
+      if (typeof branchId !== 'number') {
+        reply.code(409);
+        return { error: 'no_branch_selected' };
+      }
+      return { areas: await getTableMap(branchId) };
+    },
+  );
+
   app.post('/orders', { config: { permissions: [...MANAGE_ORDERS] } }, async (request, reply) => {
     const branchId = request.session.branchId;
     if (typeof branchId !== 'number') {
@@ -57,19 +76,23 @@ export async function ordersRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/orders/:id', { config: { permissions: [...MANAGE_ORDERS] } }, async (request, reply) => {
-    const branchId = request.session.branchId;
-    if (typeof branchId !== 'number') {
-      reply.code(409);
-      return { error: 'no_branch_selected' };
-    }
-    const order = await getOrderDetail(branchId, Number((request.params as { id: string }).id));
-    if (!order) {
-      reply.code(404);
-      return { error: 'order_not_found' };
-    }
-    return { order };
-  });
+  app.get(
+    '/orders/:id',
+    { config: { permissions: [...MANAGE_ORDERS] } },
+    async (request, reply) => {
+      const branchId = request.session.branchId;
+      if (typeof branchId !== 'number') {
+        reply.code(409);
+        return { error: 'no_branch_selected' };
+      }
+      const order = await getOrderDetail(branchId, Number((request.params as { id: string }).id));
+      if (!order) {
+        reply.code(404);
+        return { error: 'order_not_found' };
+      }
+      return { order };
+    },
+  );
 
   app.post(
     '/orders/:id/close',

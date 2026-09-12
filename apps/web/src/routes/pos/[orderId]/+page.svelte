@@ -324,9 +324,7 @@
 		const response = await apiFetch(`/orders/${orderId}/close`, { method: 'POST' });
 		if (response.ok) {
 			closed = true;
-			// Vuelve al sitio donde hoy se abren las órdenes; en la Fase 3 ese
-			// sitio pasa a ser el mapa de mesas de /pos.
-			goto('/settings/floor');
+			goto('/pos');
 		} else {
 			const body = (await response.json()) as { error: string; balanceDue?: string };
 			errorMessage =
