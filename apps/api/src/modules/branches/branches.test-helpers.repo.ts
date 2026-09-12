@@ -33,9 +33,10 @@ export async function deleteBranchFixture(fixture: BranchFixture): Promise<void>
   await db.delete(schema.auditLog).where(eq(schema.auditLog.branchId, fixture.branchId));
   await db.delete(schema.userRoles).where(eq(schema.userRoles.branchId, fixture.branchId));
 
-  // order_lines/order_line_modifiers reference orders, and orders.dine_table_id
-  // references dining_tables -- both must clear before the orders delete and
-  // the dine area/table sweep below, respectively.
+  // order_lines/order_line_modifiers/payments all reference orders, and
+  // orders.dine_table_id references dining_tables -- all three must clear
+  // before the orders delete and the dine area/table sweep below,
+  // respectively.
   const orderIds = (
     await db
       .select({ id: schema.orders.id })
@@ -43,6 +44,8 @@ export async function deleteBranchFixture(fixture: BranchFixture): Promise<void>
       .where(eq(schema.orders.branchId, fixture.branchId))
   ).map((r) => r.id);
   if (orderIds.length > 0) {
+    await db.delete(schema.payments).where(inArray(schema.payments.orderId, orderIds));
+
     const lineIds = (
       await db
         .select({ id: schema.orderLines.id })

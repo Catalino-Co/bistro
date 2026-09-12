@@ -35,11 +35,31 @@
 		taxTotal: string;
 		total: string;
 	}
+	interface PaymentMethod {
+		id: number;
+		name: string;
+	}
+	interface Payment {
+		id: number;
+		paymentMethodId: number;
+		paymentMethodName: string;
+		amount: string;
+		tipAmount: string;
+		tenderedAmount: string | null;
+	}
 
 	let items = $state<Item[]>([]);
 	let lines = $state<OrderLine[]>([]);
 	let totals = $state<Totals | null>(null);
+	let paymentMethods = $state<PaymentMethod[]>([]);
+	let payments = $state<Payment[]>([]);
 	let closed = $state(false);
+
+	let selectedPaymentMethodId = $state<number | null>(null);
+	let paymentAmount = $state('');
+	let paymentTip = $state('0');
+	let paymentTendered = $state('');
+	let paymentError = $state('');
 
 	let selectedItemId = $state<number | null>(null);
 	let itemModifierGroups = $state<ModifierGroup[]>([]);
@@ -81,8 +101,30 @@
 		}
 	}
 
+	async function loadPaymentMethods() {
+		const response = await apiFetch('/payment-methods');
+		if (response.ok) {
+			paymentMethods = ((await response.json()) as { paymentMethods: PaymentMethod[] })
+				.paymentMethods;
+		}
+	}
+
+	async function loadPayments() {
+		const response = await apiFetch(`/orders/${orderId}/payments`);
+		if (response.ok) {
+			payments = ((await response.json()) as { payments: Payment[] }).payments;
+		}
+	}
+
 	async function refresh() {
-		await Promise.all([loadLines(), loadTotals()]);
+		await Promise.all([loadLines(), loadTotals(), loadPayments()]);
+	}
+
+	function balanceDue(): number {
+		if (!totals) return 0;
+		const paid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+		const cents = Math.round(Number(totals.total) * 10000) - Math.round(paid * 10000);
+		return Math.max(0, cents) / 10000;
 	}
 
 	async function selectItem(itemId: number) {
@@ -173,16 +215,52 @@
 		}
 	}
 
+	async function submitPayment(event: SubmitEvent) {
+		event.preventDefault();
+		paymentError = '';
+		if (selectedPaymentMethodId === null || paymentAmount.trim() === '') return;
+		const response = await apiFetch(`/orders/${orderId}/payments`, {
+			method: 'POST',
+			body: JSON.stringify({
+				paymentMethodId: selectedPaymentMethodId,
+				amount: paymentAmount,
+				tipAmount: paymentTip.trim() || '0',
+				tenderedAmount: paymentTendered.trim() || undefined,
+			}),
+		});
+		if (response.ok) {
+			selectedPaymentMethodId = null;
+			paymentAmount = '';
+			paymentTip = '0';
+			paymentTendered = '';
+			await refresh();
+		} else {
+			const body = (await response.json()) as { error: string; balanceDue?: string };
+			paymentError =
+				body.balanceDue !== undefined
+					? `${body.error} (saldo: RD$ ${Number(body.balanceDue).toFixed(2)})`
+					: body.error;
+		}
+	}
+
 	async function closeOrder() {
+		errorMessage = '';
 		const response = await apiFetch(`/orders/${orderId}/close`, { method: 'POST' });
 		if (response.ok) {
 			closed = true;
 			goto('/admin/floor');
+		} else {
+			const body = (await response.json()) as { error: string; balanceDue?: string };
+			errorMessage =
+				body.error === 'insufficient_payment'
+					? `Falta cobrar RD$ ${Number(body.balanceDue).toFixed(2)}`
+					: body.error;
 		}
 	}
 
 	$effect(() => {
 		loadItems();
+		loadPaymentMethods();
 		refresh();
 	});
 </script>
@@ -279,7 +357,54 @@
 		{/if}
 	</section>
 
-	<button onclick={closeOrder} disabled={closed}>Facturar (cerrar orden)</button>
+	<section>
+		<h2>Pagos</h2>
+		{#if payments.length === 0}
+			<p>Sin pagos todavía.</p>
+		{:else}
+			<ul>
+				{#each payments as payment (payment.id)}
+					<li>
+						{payment.paymentMethodName} — RD$ {Number(payment.amount).toFixed(2)}
+						{#if Number(payment.tipAmount) > 0}
+							(propina RD$ {Number(payment.tipAmount).toFixed(2)})
+						{/if}
+						{#if payment.tenderedAmount}
+							— recibido RD$ {Number(payment.tenderedAmount).toFixed(2)}, cambio RD$ {(
+								Number(payment.tenderedAmount) - Number(payment.amount)
+							).toFixed(2)}
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		{/if}
+		<p>Saldo pendiente: RD$ {balanceDue().toFixed(2)}</p>
+
+		{#if !closed && balanceDue() > 0}
+			<form onsubmit={submitPayment}>
+				<select bind:value={selectedPaymentMethodId}>
+					<option value={null} disabled selected>Método de pago</option>
+					{#each paymentMethods as method (method.id)}
+						<option value={method.id}>{method.name}</option>
+					{/each}
+				</select>
+				<input type="text" inputmode="decimal" bind:value={paymentAmount} placeholder="Monto" />
+				<input type="text" inputmode="decimal" bind:value={paymentTip} placeholder="Propina" />
+				<input
+					type="text"
+					inputmode="decimal"
+					bind:value={paymentTendered}
+					placeholder="Recibido (efectivo, opcional)"
+				/>
+				<button type="submit" disabled={selectedPaymentMethodId === null}>Registrar pago</button>
+			</form>
+			{#if paymentError}
+				<p role="alert">{paymentError}</p>
+			{/if}
+		{/if}
+	</section>
+
+	<button onclick={closeOrder} disabled={closed || balanceDue() > 0}>Facturar (cerrar orden)</button>
 </main>
 
 <style>

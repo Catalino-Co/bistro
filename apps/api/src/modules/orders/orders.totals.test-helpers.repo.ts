@@ -74,13 +74,15 @@ export async function createModifier(
 
 export async function deleteCatalogFixtures(
   items: CatalogItemFixture[],
-  modifier: ModifierFixture,
+  modifier?: ModifierFixture,
 ): Promise<void> {
-  await db
-    .delete(schema.itemModifierGroups)
-    .where(eq(schema.itemModifierGroups.modifierGroupId, modifier.groupId));
-  await db.delete(schema.modifiers).where(eq(schema.modifiers.id, modifier.modifierId));
-  await db.delete(schema.modifierGroups).where(eq(schema.modifierGroups.id, modifier.groupId));
+  if (modifier) {
+    await db
+      .delete(schema.itemModifierGroups)
+      .where(eq(schema.itemModifierGroups.modifierGroupId, modifier.groupId));
+    await db.delete(schema.modifiers).where(eq(schema.modifiers.id, modifier.modifierId));
+    await db.delete(schema.modifierGroups).where(eq(schema.modifierGroups.id, modifier.groupId));
+  }
   await db.delete(schema.items).where(
     inArray(
       schema.items.id,

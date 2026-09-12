@@ -10,6 +10,7 @@ import {
 } from '../branches/branches.test-helpers.repo.js';
 import { findTaxRateIdByName } from '../catalog/catalog.test-helpers.repo.js';
 import { createDineArea, createDineTable } from '../floor/floor.repo.js';
+import { findPaymentMethodIdByName } from '../payments/payments.test-helpers.repo.js';
 import {
   createCatalogItem,
   createModifier,
@@ -39,12 +40,14 @@ describe('order totals', () => {
   let exemptItemId: number;
   let modifierId: number;
   let orderId: number;
+  let cashMethodId: number;
 
   beforeAll(async () => {
     const userId = await createTestUser(USERNAME, PASSWORD);
     branch = await createBranchFixture('order-totals');
     await assignRole(userId, 'admin', branch.branchId);
 
+    cashMethodId = await findPaymentMethodIdByName('Efectivo');
     const taxedRateId = await findTaxRateIdByName('ITBIS 18%');
     const exemptRateId = await findTaxRateIdByName('Exento 0%');
     taxedItem = await createCatalogItem('taxed', taxedRateId);
@@ -155,6 +158,13 @@ describe('order totals', () => {
 
   it('freezes the last live totals once the order is closed', async () => {
     const beforeClose = await getTotals();
+
+    await app.inject({
+      method: 'POST',
+      url: `/orders/${orderId}/payments`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { paymentMethodId: cashMethodId, amount: beforeClose.total },
+    });
 
     const close = await app.inject({
       method: 'POST',

@@ -10,6 +10,7 @@ import {
 } from '../branches/branches.test-helpers.repo.js';
 import { findTaxRateIdByName } from '../catalog/catalog.test-helpers.repo.js';
 import { createDineArea, createDineTable } from '../floor/floor.repo.js';
+import { findPaymentMethodIdByName } from '../payments/payments.test-helpers.repo.js';
 import {
   createItemFixture,
   createModifierFixture,
@@ -28,6 +29,7 @@ describe('order lines routes', () => {
   let unrelatedItemId: number;
   let modifierId: number;
   let orderId: number;
+  let cashMethodId: number;
 
   beforeAll(async () => {
     const userId = await createTestUser(USERNAME, PASSWORD);
@@ -38,6 +40,7 @@ describe('order lines routes', () => {
     itemId = (await createItemFixture('main', taxRateId)).itemId;
     unrelatedItemId = (await createItemFixture('unrelated', taxRateId)).itemId;
     modifierId = (await createModifierFixture('extra', itemId, '25.0000')).modifierId;
+    cashMethodId = await findPaymentMethodIdByName('Efectivo');
 
     const dineAreaId = (await createDineArea(branch.branchId, '__order_lines_test_area__')).id;
     const table = await createDineTable(dineAreaId, '__order_lines_test_table__', 4);
@@ -127,6 +130,21 @@ describe('order lines routes', () => {
   });
 
   it('rejects adding a line to a closed order', async () => {
+    const totals = await app.inject({
+      method: 'GET',
+      url: `/orders/${orderId}/totals`,
+      headers: { cookie },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/orders/${orderId}/payments`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: {
+        paymentMethodId: cashMethodId,
+        amount: (totals.json() as { total: string }).total,
+      },
+    });
+
     const closeResponse = await app.inject({
       method: 'POST',
       url: `/orders/${orderId}/close`,
@@ -154,6 +172,7 @@ describe('update and void order lines', () => {
   let modifierId: number;
   let unrelatedModifierId: number;
   let orderId: number;
+  let cashMethodId: number;
 
   beforeAll(async () => {
     const userId = await createTestUser(USERNAME, PASSWORD);
@@ -166,6 +185,7 @@ describe('update and void order lines', () => {
     modifierId = (await createModifierFixture('uv-extra', itemId, '25.0000')).modifierId;
     unrelatedModifierId = (await createModifierFixture('uv-unrelated-mod', unrelatedItemId, '10.0000'))
       .modifierId;
+    cashMethodId = await findPaymentMethodIdByName('Efectivo');
 
     const dineAreaId = (await createDineArea(branch.branchId, '__order_lines_test_area_uv__')).id;
     const table = await createDineTable(dineAreaId, '__order_lines_test_table_uv__', 4);
@@ -305,6 +325,21 @@ describe('update and void order lines', () => {
       payload: { itemId, quantity: 1 },
     });
     const lineId = (added.json() as { line: { id: number } }).line.id;
+
+    const totals = await app.inject({
+      method: 'GET',
+      url: `/orders/${orderId}/totals`,
+      headers: { cookie },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/orders/${orderId}/payments`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: {
+        paymentMethodId: cashMethodId,
+        amount: (totals.json() as { total: string }).total,
+      },
+    });
 
     const closeResponse = await app.inject({
       method: 'POST',

@@ -11,3 +11,4 @@ export * from './floor.js';
 export * from './customers.js';
 export * from './orders.js';
 export * from './order-lines.js';
+export * from './payments.js';

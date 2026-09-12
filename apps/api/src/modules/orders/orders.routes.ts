@@ -73,6 +73,9 @@ export async function ordersRoutes(app: FastifyInstance) {
         case 'already_closed':
           reply.code(409);
           return { error: 'already_closed' };
+        case 'insufficient_payment':
+          reply.code(409);
+          return { error: 'insufficient_payment', balanceDue: result.balanceDue };
         case 'closed':
           reply.code(204);
           return null;
