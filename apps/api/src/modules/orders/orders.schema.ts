@@ -12,3 +12,13 @@ export const addOrderLineBodySchema = z.object({
   note: z.string().max(500).optional(),
   modifierIds: z.array(z.number().int().positive()).default([]),
 });
+
+export const updateOrderLineBodySchema = z.object({
+  quantity: z.number().int().positive().max(999),
+  note: z.string().max(500).optional(),
+  modifierIds: z.array(z.number().int().positive()).default([]),
+});
+
+export const voidOrderLineBodySchema = z.object({
+  reason: z.string().max(500).optional(),
+});

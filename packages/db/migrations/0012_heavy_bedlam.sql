@@ -1,0 +1,1 @@
+ALTER TABLE "bistro"."order_lines" ADD COLUMN "voided_at" timestamp with time zone;

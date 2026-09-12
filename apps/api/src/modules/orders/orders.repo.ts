@@ -1,5 +1,6 @@
 import { db, schema } from '@bistro/db';
 import { and, eq, inArray } from 'drizzle-orm';
+import { recordAuditEvent } from '../audit/audit.repo.js';
 
 export type DispatchMode = 'dine_in' | 'delivery' | 'pickup' | 'room_service';
 
@@ -163,6 +164,7 @@ export interface OrderLineRow {
   quantity: number;
   note: string | null;
   unitPrice: string;
+  voidedAt: Date | null;
   modifiers: OrderLineModifierRow[];
 }
 
@@ -257,6 +259,7 @@ export async function addOrderLine(
         quantity: line.quantity,
         note: line.note,
         unitPrice: line.unitPrice,
+        voidedAt: line.voidedAt,
         modifiers: modifierRows.map((m) => ({
           modifierId: m.id,
           name: m.name,
@@ -284,6 +287,7 @@ export async function listOrderLines(branchId: number, orderId: number): Promise
       quantity: schema.orderLines.quantity,
       note: schema.orderLines.note,
       unitPrice: schema.orderLines.unitPrice,
+      voidedAt: schema.orderLines.voidedAt,
     })
     .from(schema.orderLines)
     .where(eq(schema.orderLines.orderId, orderId));
@@ -309,4 +313,241 @@ export async function listOrderLines(branchId: number, orderId: number): Promise
   }
 
   return lines.map((line) => ({ ...line, modifiers: modifiersByLine.get(line.id) ?? [] }));
+}
+
+export type UpdateOrderLineResult =
+  | { outcome: 'updated'; line: OrderLineRow }
+  | { outcome: 'order_not_found' }
+  | { outcome: 'order_closed' }
+  | { outcome: 'line_not_found' }
+  | { outcome: 'line_voided' }
+  | { outcome: 'modifier_not_allowed' };
+
+type UpdateOrderLineTxResult =
+  | { outcome: 'updated'; before: { quantity: number; note: string | null }; line: OrderLineRow }
+  | { outcome: 'order_not_found' }
+  | { outcome: 'order_closed' }
+  | { outcome: 'line_not_found' }
+  | { outcome: 'line_voided' }
+  | { outcome: 'modifier_not_allowed' };
+
+// Full replace of quantity/note/modifiers, not a partial patch -- same
+// choice floor.repo.ts's updateDineTable makes. Modifiers are revalidated
+// against the line's item exactly like addOrderLine does, and priceDelta is
+// re-snapshotted from the modifier's current price (this is a correction to
+// an unbilled line, not a historical record yet).
+export async function updateOrderLine(
+  branchId: number,
+  orderId: number,
+  lineId: number,
+  quantity: number,
+  note: string | undefined,
+  modifierIds: number[],
+  actorUserId?: number,
+): Promise<UpdateOrderLineResult> {
+  const result: UpdateOrderLineTxResult = await db.transaction(async (tx) => {
+    const [order] = await tx
+      .select({ status: schema.orders.status })
+      .from(schema.orders)
+      .where(and(eq(schema.orders.id, orderId), eq(schema.orders.branchId, branchId)));
+    if (!order) {
+      return { outcome: 'order_not_found' };
+    }
+    if (order.status === 'closed') {
+      return { outcome: 'order_closed' };
+    }
+
+    const [line] = await tx
+      .select({
+        id: schema.orderLines.id,
+        orderId: schema.orderLines.orderId,
+        itemId: schema.orderLines.itemId,
+        quantity: schema.orderLines.quantity,
+        note: schema.orderLines.note,
+        unitPrice: schema.orderLines.unitPrice,
+        voidedAt: schema.orderLines.voidedAt,
+      })
+      .from(schema.orderLines)
+      .where(and(eq(schema.orderLines.id, lineId), eq(schema.orderLines.orderId, orderId)))
+      .for('update');
+    if (!line) {
+      return { outcome: 'line_not_found' };
+    }
+    if (line.voidedAt !== null) {
+      return { outcome: 'line_voided' };
+    }
+
+    const distinctModifierIds = [...new Set(modifierIds)];
+    let modifierRows: { id: number; name: string; priceDelta: string }[] = [];
+    if (distinctModifierIds.length > 0) {
+      modifierRows = await tx
+        .select({
+          id: schema.modifiers.id,
+          name: schema.modifiers.name,
+          priceDelta: schema.modifiers.priceDelta,
+        })
+        .from(schema.modifiers)
+        .innerJoin(
+          schema.itemModifierGroups,
+          eq(schema.itemModifierGroups.modifierGroupId, schema.modifiers.groupId),
+        )
+        .where(
+          and(
+            eq(schema.itemModifierGroups.itemId, line.itemId),
+            inArray(schema.modifiers.id, distinctModifierIds),
+          ),
+        );
+      if (modifierRows.length !== distinctModifierIds.length) {
+        return { outcome: 'modifier_not_allowed' };
+      }
+    }
+
+    const before = { quantity: line.quantity, note: line.note };
+    const nextNote = note ?? null;
+
+    await tx
+      .update(schema.orderLines)
+      .set({ quantity, note: nextNote })
+      .where(eq(schema.orderLines.id, lineId));
+
+    await tx
+      .delete(schema.orderLineModifiers)
+      .where(eq(schema.orderLineModifiers.orderLineId, lineId));
+    if (modifierRows.length > 0) {
+      await tx.insert(schema.orderLineModifiers).values(
+        modifierRows.map((m) => ({
+          orderLineId: lineId,
+          modifierId: m.id,
+          priceDelta: m.priceDelta,
+        })),
+      );
+    }
+
+    return {
+      outcome: 'updated',
+      before,
+      line: {
+        id: line.id,
+        orderId: line.orderId,
+        itemId: line.itemId,
+        quantity,
+        note: nextNote,
+        unitPrice: line.unitPrice,
+        voidedAt: line.voidedAt,
+        modifiers: modifierRows.map((m) => ({
+          modifierId: m.id,
+          name: m.name,
+          priceDelta: m.priceDelta,
+        })),
+      },
+    };
+  });
+
+  if (result.outcome === 'updated') {
+    await recordAuditEvent({
+      actionKey: 'order_line.updated',
+      entityType: 'order_line',
+      entityId: String(lineId),
+      branchId,
+      userId: actorUserId,
+      beforeData: result.before,
+      afterData: {
+        quantity: result.line.quantity,
+        note: result.line.note,
+        modifierIds: result.line.modifiers.map((m) => m.modifierId),
+      },
+    });
+    return { outcome: 'updated', line: result.line };
+  }
+  return result;
+}
+
+export type VoidOrderLineResult =
+  | { outcome: 'voided'; line: OrderLineRow }
+  | { outcome: 'order_not_found' }
+  | { outcome: 'order_closed' }
+  | { outcome: 'line_not_found' }
+  | { outcome: 'already_voided' };
+
+// Soft-cancel: the line stays on the order (voided_at set) instead of being
+// deleted, so it still shows up -- struck through -- in what was ordered.
+export async function voidOrderLine(
+  branchId: number,
+  orderId: number,
+  lineId: number,
+  reason: string | undefined,
+  actorUserId?: number,
+): Promise<VoidOrderLineResult> {
+  const result: VoidOrderLineResult = await db.transaction(async (tx) => {
+    const [order] = await tx
+      .select({ status: schema.orders.status })
+      .from(schema.orders)
+      .where(and(eq(schema.orders.id, orderId), eq(schema.orders.branchId, branchId)));
+    if (!order) {
+      return { outcome: 'order_not_found' };
+    }
+    if (order.status === 'closed') {
+      return { outcome: 'order_closed' };
+    }
+
+    const [line] = await tx
+      .select({
+        id: schema.orderLines.id,
+        orderId: schema.orderLines.orderId,
+        itemId: schema.orderLines.itemId,
+        quantity: schema.orderLines.quantity,
+        note: schema.orderLines.note,
+        unitPrice: schema.orderLines.unitPrice,
+        voidedAt: schema.orderLines.voidedAt,
+      })
+      .from(schema.orderLines)
+      .where(and(eq(schema.orderLines.id, lineId), eq(schema.orderLines.orderId, orderId)))
+      .for('update');
+    if (!line) {
+      return { outcome: 'line_not_found' };
+    }
+    if (line.voidedAt !== null) {
+      return { outcome: 'already_voided' };
+    }
+
+    const voidedAt = new Date();
+    await tx.update(schema.orderLines).set({ voidedAt }).where(eq(schema.orderLines.id, lineId));
+
+    const modifierRows = await tx
+      .select({
+        modifierId: schema.orderLineModifiers.modifierId,
+        name: schema.modifiers.name,
+        priceDelta: schema.orderLineModifiers.priceDelta,
+      })
+      .from(schema.orderLineModifiers)
+      .innerJoin(schema.modifiers, eq(schema.modifiers.id, schema.orderLineModifiers.modifierId))
+      .where(eq(schema.orderLineModifiers.orderLineId, lineId));
+
+    return {
+      outcome: 'voided',
+      line: {
+        id: line.id,
+        orderId: line.orderId,
+        itemId: line.itemId,
+        quantity: line.quantity,
+        note: line.note,
+        unitPrice: line.unitPrice,
+        voidedAt,
+        modifiers: modifierRows,
+      },
+    };
+  });
+
+  if (result.outcome === 'voided') {
+    await recordAuditEvent({
+      actionKey: 'order_line.voided',
+      entityType: 'order_line',
+      entityId: String(lineId),
+      branchId,
+      userId: actorUserId,
+      beforeData: { voidedAt: null },
+      afterData: { voidedAt: result.line.voidedAt?.toISOString(), reason },
+    });
+  }
+  return result;
 }

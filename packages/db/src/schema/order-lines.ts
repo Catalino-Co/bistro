@@ -21,6 +21,10 @@ export const orderLines = bistro.table('order_lines', {
   // catalog price change doesn't retroactively change an existing order.
   unitPrice: numeric('unit_price', { precision: 12, scale: 4 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  // Soft-cancel: a voided line stays on the order (and visible in the POS,
+  // struck through) instead of being deleted, so a mistaken or
+  // changed-mind item still shows up in what was ordered.
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
 });
 
 export const orderLineModifiers = bistro.table(

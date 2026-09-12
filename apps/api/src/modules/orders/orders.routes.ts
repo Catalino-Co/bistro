@@ -5,8 +5,15 @@ import {
   findOpenOrderForTable,
   listOrderLines,
   openOrder,
+  updateOrderLine,
+  voidOrderLine,
 } from './orders.repo.js';
-import { addOrderLineBodySchema, openOrderBodySchema } from './orders.schema.js';
+import {
+  addOrderLineBodySchema,
+  openOrderBodySchema,
+  updateOrderLineBodySchema,
+  voidOrderLineBodySchema,
+} from './orders.schema.js';
 
 const MANAGE_ORDERS = ['orders.manage'] as const;
 
@@ -140,6 +147,97 @@ export async function ordersRoutes(app: FastifyInstance) {
         case 'added':
           reply.code(201);
           return { line: result.line };
+      }
+    },
+  );
+
+  app.patch(
+    '/orders/:id/lines/:lineId',
+    { config: { permissions: [...MANAGE_ORDERS] } },
+    async (request, reply) => {
+      const branchId = request.session.branchId;
+      if (typeof branchId !== 'number') {
+        reply.code(409);
+        return { error: 'no_branch_selected' };
+      }
+      const parsed = updateOrderLineBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: 'invalid_request' };
+      }
+
+      const { id, lineId } = request.params as { id: string; lineId: string };
+      const result = await updateOrderLine(
+        branchId,
+        Number(id),
+        Number(lineId),
+        parsed.data.quantity,
+        parsed.data.note,
+        parsed.data.modifierIds,
+        request.session.userId,
+      );
+      switch (result.outcome) {
+        case 'order_not_found':
+          reply.code(404);
+          return { error: 'order_not_found' };
+        case 'order_closed':
+          reply.code(409);
+          return { error: 'order_closed' };
+        case 'line_not_found':
+          reply.code(404);
+          return { error: 'line_not_found' };
+        case 'line_voided':
+          reply.code(409);
+          return { error: 'line_voided' };
+        case 'modifier_not_allowed':
+          reply.code(400);
+          return { error: 'modifier_not_allowed' };
+        case 'updated':
+          reply.code(200);
+          return { line: result.line };
+      }
+    },
+  );
+
+  app.post(
+    '/orders/:id/lines/:lineId/void',
+    { config: { permissions: [...MANAGE_ORDERS] } },
+    async (request, reply) => {
+      const branchId = request.session.branchId;
+      if (typeof branchId !== 'number') {
+        reply.code(409);
+        return { error: 'no_branch_selected' };
+      }
+      const parsed = voidOrderLineBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: 'invalid_request' };
+      }
+
+      const { id, lineId } = request.params as { id: string; lineId: string };
+      const result = await voidOrderLine(
+        branchId,
+        Number(id),
+        Number(lineId),
+        parsed.data.reason,
+        request.session.userId,
+      );
+      switch (result.outcome) {
+        case 'order_not_found':
+          reply.code(404);
+          return { error: 'order_not_found' };
+        case 'order_closed':
+          reply.code(409);
+          return { error: 'order_closed' };
+        case 'line_not_found':
+          reply.code(404);
+          return { error: 'line_not_found' };
+        case 'already_voided':
+          reply.code(409);
+          return { error: 'already_voided' };
+        case 'voided':
+          reply.code(204);
+          return null;
       }
     },
   );

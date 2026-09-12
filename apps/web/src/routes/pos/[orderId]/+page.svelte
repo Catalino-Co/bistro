@@ -27,6 +27,7 @@
 		quantity: number;
 		note: string | null;
 		unitPrice: string;
+		voidedAt: string | null;
 		modifiers: { modifierId: number; name: string; priceDelta: string }[];
 	}
 
@@ -41,6 +42,7 @@
 	let quantity = $state('1');
 	let note = $state('');
 	let errorMessage = $state('');
+	let editingLineId = $state<number | null>(null);
 
 	function itemName(itemId: number): string {
 		return items.find((i) => i.id === itemId)?.name ?? `Ítem #${itemId}`;
@@ -92,23 +94,61 @@
 		selectedModifierIds = next;
 	}
 
-	async function addLine(event: SubmitEvent) {
+	function resetForm() {
+		editingLineId = null;
+		selectedItemId = null;
+		itemModifierGroups = [];
+		modifiersByGroup = {};
+		selectedModifierIds = new Set();
+		quantity = '1';
+		note = '';
+	}
+
+	async function startEdit(line: OrderLine) {
+		errorMessage = '';
+		editingLineId = line.id;
+		quantity = String(line.quantity);
+		note = line.note ?? '';
+		await selectItem(line.itemId);
+		selectedModifierIds = new Set(line.modifiers.map((m) => m.modifierId));
+	}
+
+	async function submitLine(event: SubmitEvent) {
 		event.preventDefault();
 		errorMessage = '';
 		if (selectedItemId === null) return;
-		const response = await apiFetch(`/orders/${orderId}/lines`, {
+		const payload = {
+			quantity: Number(quantity) || 1,
+			note: note.trim() || undefined,
+			modifierIds: [...selectedModifierIds],
+		};
+		const response =
+			editingLineId === null
+				? await apiFetch(`/orders/${orderId}/lines`, {
+						method: 'POST',
+						body: JSON.stringify({ itemId: selectedItemId, ...payload }),
+					})
+				: await apiFetch(`/orders/${orderId}/lines/${editingLineId}`, {
+						method: 'PATCH',
+						body: JSON.stringify(payload),
+					});
+		if (response.ok) {
+			resetForm();
+			await loadLines();
+		} else {
+			const body = (await response.json()) as { error: string };
+			errorMessage = body.error;
+		}
+	}
+
+	async function voidLine(lineId: number) {
+		if (!confirm('¿Anular esta línea?')) return;
+		errorMessage = '';
+		const response = await apiFetch(`/orders/${orderId}/lines/${lineId}/void`, {
 			method: 'POST',
-			body: JSON.stringify({
-				itemId: selectedItemId,
-				quantity: Number(quantity) || 1,
-				note: note.trim() || undefined,
-				modifierIds: [...selectedModifierIds],
-			}),
 		});
 		if (response.ok) {
-			quantity = '1';
-			note = '';
-			selectedModifierIds = new Set();
+			if (editingLineId === lineId) resetForm();
 			await loadLines();
 		} else {
 			const body = (await response.json()) as { error: string };
@@ -140,7 +180,7 @@
 		{:else}
 			<ul>
 				{#each lines as line (line.id)}
-					<li>
+					<li class:voided={line.voidedAt !== null}>
 						{line.quantity}× {itemName(line.itemId)}
 						{#if line.modifiers.length > 0}
 							(+ {line.modifiers.map((m) => m.name).join(', ')})
@@ -149,6 +189,16 @@
 							— <em>{line.note}</em>
 						{/if}
 						— RD$ {lineTotal(line).toFixed(2)}
+						{#if line.voidedAt}
+							<span class="voided-tag">(anulada)</span>
+						{:else}
+							<button type="button" disabled={closed} onclick={() => startEdit(line)}
+								>Editar</button
+							>
+							<button type="button" disabled={closed} onclick={() => voidLine(line.id)}
+								>Anular</button
+							>
+						{/if}
 					</li>
 				{/each}
 			</ul>
@@ -156,9 +206,13 @@
 	</section>
 
 	<section>
-		<h2>Agregar línea</h2>
-		<form onsubmit={addLine}>
-			<select bind:value={selectedItemId} onchange={() => selectedItemId && selectItem(selectedItemId)}>
+		<h2>{editingLineId === null ? 'Agregar línea' : `Editar línea #${editingLineId}`}</h2>
+		<form onsubmit={submitLine}>
+			<select
+				bind:value={selectedItemId}
+				disabled={editingLineId !== null}
+				onchange={() => selectedItemId && selectItem(selectedItemId)}
+			>
 				<option value={null} disabled selected>Selecciona un ítem</option>
 				{#each items as item (item.id)}
 					<option value={item.id}>{item.name} — RD$ {item.price}</option>
@@ -186,7 +240,12 @@
 				</fieldset>
 			{/if}
 
-			<button type="submit" disabled={selectedItemId === null}>Agregar</button>
+			<button type="submit" disabled={selectedItemId === null}>
+				{editingLineId === null ? 'Agregar' : 'Guardar cambios'}
+			</button>
+			{#if editingLineId !== null}
+				<button type="button" onclick={resetForm}>Cancelar</button>
+			{/if}
 		</form>
 		{#if errorMessage}
 			<p role="alert">{errorMessage}</p>
@@ -195,3 +254,13 @@
 
 	<button onclick={closeOrder} disabled={closed}>Facturar (cerrar orden)</button>
 </main>
+
+<style>
+	.voided {
+		text-decoration: line-through;
+		opacity: 0.6;
+	}
+	.voided-tag {
+		font-style: italic;
+	}
+</style>
