@@ -37,7 +37,17 @@ const updateBranchBodySchema = z
     name: z.string().min(1).max(255).optional(),
     timezone: z.string().min(1).max(64).optional(),
     status: z.enum(['active', 'inactive']).optional(),
+    // null quita la impresora de caja y deja la sucursal cobrando sin
+    // imprimir, que es una configuración válida.
+    receiptPrinterHost: z.string().min(1).max(255).nullable().optional(),
+    receiptPrinterPort: z.number().int().min(1).max(65535).nullable().optional(),
   })
+  .refine(
+    (body) =>
+      (body.receiptPrinterHost === undefined) === (body.receiptPrinterPort === undefined) &&
+      (body.receiptPrinterHost === null) === (body.receiptPrinterPort === null),
+    { message: 'la impresora necesita dirección y puerto, o ninguno de los dos' },
+  )
   .refine((body) => Object.keys(body).length > 0, { message: 'nada que actualizar' });
 
 /**
@@ -170,7 +180,12 @@ export async function orgRoutes(app: FastifyInstance) {
         actionKey: 'org.branch_updated',
         entityType: 'branch',
         entityId: String(id),
-        beforeData: { name: before.name, timezone: before.timezone, status: before.status },
+        beforeData: {
+          name: before.name,
+          timezone: before.timezone,
+          status: before.status,
+          receiptPrinterHost: before.receiptPrinterHost,
+        },
         afterData: parsed.data,
         userId: request.session.userId!,
       });

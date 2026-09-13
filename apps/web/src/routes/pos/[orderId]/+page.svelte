@@ -90,6 +90,26 @@
 	let note = $state('');
 	let errorMessage = $state('');
 	let lineToVoid = $state<OrderLine | null>(null);
+	let printing = $state(false);
+	let printError = $state('');
+
+	/**
+	 * La pre-cuenta: el papel que se lleva a la mesa para que el cliente
+	 * revise antes de pagar. Es el mismo documento que la reimpresión de
+	 * después, y cada impresión queda numerada en la bitácora.
+	 */
+	async function printBill() {
+		printError = '';
+		printing = true;
+		try {
+			const response = await apiFetch(`/orders/${orderId}/print-bill`, { method: 'POST' });
+			if (!response.ok) {
+				printError = await apiErrorMessage(response, 'No se pudo imprimir la cuenta.');
+			}
+		} finally {
+			printing = false;
+		}
+	}
 	let editingLineId = $state<number | null>(null);
 	let kitchenError = $state('');
 
@@ -540,6 +560,9 @@
 		{#if kitchenError}
 			<p role="alert">{kitchenError}</p>
 		{/if}
+		{#if printError}
+			<p role="alert">{printError}</p>
+		{/if}
 
 		<div class="panel-actions">
 			<button
@@ -550,6 +573,10 @@
 			>
 				<Icon name="send" size={18} />
 				Enviar a cocina
+			</button>
+			<button type="button" class="btn-secondary" disabled={printing} onclick={printBill}>
+				<Icon name="printer" size={18} />
+				{printing ? 'Imprimiendo…' : 'Imprimir cuenta'}
 			</button>
 			<button
 				type="button"

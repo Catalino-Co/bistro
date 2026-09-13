@@ -18,6 +18,7 @@ import {
   listOrdersQuerySchema,
   voidOrderLineBodySchema,
 } from './orders.schema.js';
+import { printOrderBill } from './bill.repo.js';
 import { listOrders } from './orders.history.repo.js';
 import { getTableMap } from './table-map.repo.js';
 
@@ -185,6 +186,44 @@ export async function ordersRoutes(app: FastifyInstance) {
       }
       const dineTableId = Number((request.params as { dineTableId: string }).dineTableId);
       return { order: await findOpenOrderForTable(branchId, dineTableId) };
+    },
+  );
+
+  // La cuenta del cliente. Sirve igual para la pre-cuenta que se lleva a la
+  // mesa antes de cobrar y para la reimpresión de una orden ya cerrada; el
+  // papel dice cuántas reimpresiones van y cada intento queda en la
+  // bitácora, que es el control que de verdad importa aquí.
+  app.post(
+    '/orders/:id/print-bill',
+    { config: { permissions: [...MANAGE_ORDERS] } },
+    async (request, reply) => {
+      const branchId = request.session.branchId;
+      if (typeof branchId !== 'number') {
+        reply.code(409);
+        return { error: 'no_branch_selected' };
+      }
+
+      const result = await printOrderBill(
+        branchId,
+        Number((request.params as { id: string }).id),
+        request.session.userId!,
+      );
+
+      switch (result.outcome) {
+        case 'order_not_found':
+          reply.code(404);
+          return { error: 'order_not_found' };
+        case 'no_printer':
+          reply.code(409);
+          return { error: 'no_receipt_printer' };
+        case 'print_failed':
+          // 502: la orden y la cuenta están bien; quien falló fue la
+          // impresora, y la pantalla tiene que poder decirlo así.
+          reply.code(502);
+          return { error: 'print_failed', detail: result.error };
+        case 'printed':
+          return { reprintNumber: result.reprintNumber };
+      }
     },
   );
 

@@ -1,4 +1,4 @@
-import { bigint, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, integer, text, timestamp } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { bistro, statusEnum } from './_shared.js';
 
@@ -27,6 +27,13 @@ export const branches = bistro.table('branches', {
     .references(() => businessUnits.id),
   name: text('name').notNull(),
   timezone: text('timezone').notNull().default('America/Santo_Domingo'),
+  // La impresora de caja, donde sale la cuenta del cliente. Va en la
+  // sucursal y no en una tabla aparte porque un local tiene una caja; si
+  // alguno llega a tener dos terminales de cobro, esto se convierte en su
+  // propia tabla igual que kitchen_stations. Nullable: una sucursal puede
+  // operar sin imprimir nada y mostrar la cuenta en pantalla.
+  receiptPrinterHost: text('receipt_printer_host'),
+  receiptPrinterPort: integer('receipt_printer_port'),
   status: statusEnum('status').notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

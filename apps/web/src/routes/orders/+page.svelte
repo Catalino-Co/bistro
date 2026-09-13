@@ -10,7 +10,9 @@
 	import Field from '$lib/components/Field.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
+	import { apiErrorMessage } from '$lib/errors.js';
 	import { DISPATCH_MODE, ORDER_STATUS, orderLineState, statusLabel } from '$lib/status.js';
+	import { toasts } from '$lib/toasts.svelte.js';
 
 	// Una orden cerrada salía del alcance de la interfaz para siempre: se
 	// cobraba y dejaba de existir para quien usa el sistema. Esta pantalla
@@ -79,6 +81,32 @@
 	let payments = $state<Payment[]>([]);
 	let liveTotals = $state<Totals | null>(null);
 	let loadingDetail = $state(false);
+	let printing = $state(false);
+
+	/**
+	 * Reimprime la cuenta. Cada impresión queda en la bitácora y el papel
+	 * dice cuántas van, así que no hace falta ningún permiso especial para
+	 * pulsar esto: lo que hace falta es que quede rastro, y queda.
+	 */
+	async function printBill() {
+		if (!detail) return;
+		printing = true;
+		try {
+			const response = await apiFetch(`/orders/${detail.id}/print-bill`, { method: 'POST' });
+			if (!response.ok) {
+				toasts.error(await apiErrorMessage(response, 'No se pudo imprimir la cuenta.'));
+				return;
+			}
+			const { reprintNumber } = (await response.json()) as { reprintNumber: number };
+			toasts.success(
+				reprintNumber === 0
+					? 'Cuenta enviada a la impresora de caja.'
+					: `Reimpresión #${reprintNumber} enviada a la impresora de caja.`,
+			);
+		} finally {
+			printing = false;
+		}
+	}
 
 	const TABS: { value: Tab; label: string }[] = [
 		{ value: 'open', label: 'Abiertas' },
@@ -289,11 +317,21 @@
 								{#if detail.closedAt}· cerrada {clock(detail.closedAt)}{/if}
 							</p>
 						</div>
-						{#if detail.status === 'open'}
-							<Button variant="primary" onclick={() => goto(`/pos/${detail!.id}`)}>
-								Seguir en el POS
+						<div class="bill-actions">
+							<Button
+								variant="secondary"
+								icon="printer"
+								loading={printing}
+								onclick={printBill}
+							>
+								Imprimir cuenta
 							</Button>
-						{/if}
+							{#if detail.status === 'open'}
+								<Button variant="primary" onclick={() => goto(`/pos/${detail!.id}`)}>
+									Seguir en el POS
+								</Button>
+							{/if}
+						</div>
 					</header>
 
 					<ul class="lines">
@@ -428,6 +466,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-4);
+	}
+
+	.bill-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
 	}
 
 	.bill header {

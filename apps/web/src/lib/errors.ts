@@ -21,6 +21,9 @@ const MESSAGES: Record<string, string> = {
   already_closed: 'La orden ya estaba cerrada.',
   order_closed: 'La orden está cerrada.',
   insufficient_payment: 'Falta cubrir el total antes de cerrar la orden.',
+  no_receipt_printer:
+    'Esta sucursal no tiene impresora de caja configurada. Se asigna en Ajustes → Sucursales.',
+  print_failed: 'La impresora de caja no respondió. Revisa que esté encendida y en red.',
   room_service_not_allowed: 'Ese tipo de cliente no admite room service.',
   line_not_found: 'La línea ya no existe.',
   line_voided: 'La línea está anulada.',

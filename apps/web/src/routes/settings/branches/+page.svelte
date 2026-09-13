@@ -33,6 +33,8 @@
 		name: string;
 		timezone: string;
 		status: string;
+		receiptPrinterHost: string | null;
+		receiptPrinterPort: number | null;
 	}
 
 	type Level = 'company' | 'unit' | 'branch';
@@ -54,6 +56,8 @@
 	let editingBranch = $state<Branch | null>(null);
 	let branchName = $state('');
 	let branchStatus = $state<'active' | 'inactive'>('active');
+	let printerHost = $state('');
+	let printerPort = $state('');
 	let savingBranch = $state(false);
 
 	const selectedCompany = $derived(companies.find((c) => c.id === selectedCompanyId) ?? null);
@@ -152,17 +156,33 @@
 		editingBranch = branch;
 		branchName = branch.name;
 		branchStatus = branch.status === 'inactive' ? 'inactive' : 'active';
+		printerHost = branch.receiptPrinterHost ?? '';
+		printerPort = branch.receiptPrinterPort === null ? '' : String(branch.receiptPrinterPort);
 	}
 
 	async function saveBranch() {
 		const branch = editingBranch;
 		const value = branchName.trim();
 		if (!branch || !value) return;
+		const host = printerHost.trim();
+		const port = printerPort.trim();
+		// La API rechaza una dirección sin puerto; se avisa aquí en vez de
+		// devolver un `invalid_request` sin contexto.
+		if (Boolean(host) !== Boolean(port)) {
+			toasts.error('La impresora de caja necesita dirección y puerto, o ninguno de los dos.');
+			return;
+		}
+
 		savingBranch = true;
 		try {
 			const response = await apiFetch(`/org/branches/${branch.id}`, {
 				method: 'PATCH',
-				body: JSON.stringify({ name: value, status: branchStatus }),
+				body: JSON.stringify({
+					name: value,
+					status: branchStatus,
+					receiptPrinterHost: host || null,
+					receiptPrinterPort: port ? Number(port) : null,
+				}),
 			});
 			if (!response.ok) {
 				toasts.error(await apiErrorMessage(response, 'No se pudo guardar la sucursal.'));
@@ -271,6 +291,13 @@
 						{@const status = statusLabel(ACTIVE_STATUS, branch.status)}
 						<DataListRow title={branch.name} meta={branch.timezone}>
 							<Badge tone={status.tone}>{status.label}</Badge>
+							{#if branch.receiptPrinterHost}
+								<Badge tone="neutral">
+									Caja {branch.receiptPrinterHost}:{branch.receiptPrinterPort}
+								</Badge>
+							{:else}
+								<Badge tone="warning">Sin impresora de caja</Badge>
+							{/if}
 							{#snippet actions()}
 								<Button
 									size="sm"
@@ -327,6 +354,13 @@
 			</select>
 		{/snippet}
 	</Field>
+	<Field
+		label="Impresora de caja"
+		bind:value={printerHost}
+		placeholder="192.168.1.60"
+		hint="Donde sale la cuenta del cliente. Déjala vacía para cobrar sin imprimir."
+	/>
+	<Field label="Puerto" type="number" bind:value={printerPort} placeholder="9100" />
 	{#snippet footer()}
 		<Button variant="ghost" disabled={savingBranch} onclick={() => (editingBranch = null)}>
 			Cancelar

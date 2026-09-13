@@ -21,6 +21,9 @@ export interface BranchRow {
   name: string;
   timezone: string;
   status: 'active' | 'inactive';
+  /** Impresora de caja: donde sale la cuenta del cliente. */
+  receiptPrinterHost: string | null;
+  receiptPrinterPort: number | null;
 }
 
 export async function listCompanies(): Promise<CompanyRow[]> {
@@ -81,6 +84,8 @@ export async function listBranches(businessUnitId?: number): Promise<BranchRow[]
       name: schema.branches.name,
       timezone: schema.branches.timezone,
       status: schema.branches.status,
+      receiptPrinterHost: schema.branches.receiptPrinterHost,
+      receiptPrinterPort: schema.branches.receiptPrinterPort,
     })
     .from(schema.branches);
   return businessUnitId !== undefined
@@ -102,6 +107,8 @@ export async function insertBranch(
       name: schema.branches.name,
       timezone: schema.branches.timezone,
       status: schema.branches.status,
+      receiptPrinterHost: schema.branches.receiptPrinterHost,
+      receiptPrinterPort: schema.branches.receiptPrinterPort,
     });
   if (!row) throw new Error('Failed to create branch');
   return row;
@@ -113,12 +120,18 @@ export async function updateBranchRow(
     name?: string | undefined;
     timezone?: string | undefined;
     status?: ('active' | 'inactive') | undefined;
+    receiptPrinterHost?: string | null | undefined;
+    receiptPrinterPort?: number | null | undefined;
   },
 ): Promise<void> {
   const patch: Partial<typeof schema.branches.$inferInsert> = {};
   if (values.name !== undefined) patch.name = values.name;
   if (values.timezone !== undefined) patch.timezone = values.timezone;
   if (values.status !== undefined) patch.status = values.status;
+  // `null` es un valor legítimo aquí -- es como se quita la impresora --
+  // así que se distingue de "no vino en el patch".
+  if (values.receiptPrinterHost !== undefined) patch.receiptPrinterHost = values.receiptPrinterHost;
+  if (values.receiptPrinterPort !== undefined) patch.receiptPrinterPort = values.receiptPrinterPort;
   if (Object.keys(patch).length === 0) return;
 
   await db.update(schema.branches).set(patch).where(eq(schema.branches.id, id));
@@ -148,6 +161,8 @@ export async function findBranchRow(id: number): Promise<BranchRow | null> {
       name: schema.branches.name,
       timezone: schema.branches.timezone,
       status: schema.branches.status,
+      receiptPrinterHost: schema.branches.receiptPrinterHost,
+      receiptPrinterPort: schema.branches.receiptPrinterPort,
     })
     .from(schema.branches)
     .where(eq(schema.branches.id, id));
