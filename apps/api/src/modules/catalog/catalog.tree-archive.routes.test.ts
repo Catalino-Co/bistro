@@ -14,7 +14,7 @@ import {
   deleteCatalogFixtures,
   type CatalogItemFixture,
 } from '../orders/orders.totals.test-helpers.repo.js';
-import { findTaxRateIdByName } from './catalog.test-helpers.repo.js';
+import { deleteSubfamilyFixture, findTaxRateIdByName } from './catalog.test-helpers.repo.js';
 
 const USERNAME = '__tree_archive_test_user__';
 const PASSWORD = 'CorrectHorseBatteryStaple1!';
@@ -190,6 +190,72 @@ describe('archiving families, subfamilies and categories', () => {
     expect((subfamily.json() as { error: string }).error).toBe('parent_archived');
 
     await restore('families', fixture.familyId);
+    await app.inject({
+      method: 'PATCH',
+      url: `/catalog/families/${fixture.familyId}`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { status: 'active' },
+    });
+  });
+
+  it('refuses to hang new children off an archived GRANDparent too', async () => {
+    // El caso que se colaba: la subfamilia y la categoria siguen vivas, pero
+    // su familia esta archivada. Mirando solo al padre directo, la categoria
+    // y el item nacian invisibles -- el picker exige toda la ascendencia.
+    expect((await archive('families', fixture.familyId)).statusCode).toBe(200);
+
+    const category = await app.inject({
+      method: 'POST',
+      url: '/catalog/categories',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { subfamilyId: fixture.subfamilyId, name: '__tree_archive_test_grandorphan__' },
+    });
+    expect(category.statusCode).toBe(409);
+    expect((category.json() as { error: string }).error).toBe('parent_archived');
+
+    // Y dos niveles mas abajo, con la familia archivada como bisabuela.
+    const item = await app.inject({
+      method: 'POST',
+      url: '/catalog/items',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: {
+        categoryId: fixture.categoryId,
+        name: '__tree_archive_test_grandorphan_item__',
+        price: '10.00',
+        taxRateId: await findTaxRateIdByName('ITBIS 18%'),
+      },
+    });
+    expect(item.statusCode).toBe(409);
+    expect((item.json() as { error: string }).error).toBe('parent_archived');
+
+    await restore('families', fixture.familyId);
+  });
+
+  it('still hangs children off a PAUSED parent -- pausar no es retirar', async () => {
+    // El contrapunto que fija la regla: el guard mira `archived_at`, nunca
+    // `status`. Montar una rama entera antes de abrirla a la venta tiene que
+    // seguir siendo posible.
+    const paused = await app.inject({
+      method: 'PATCH',
+      url: `/catalog/families/${fixture.familyId}`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { status: 'inactive' },
+    });
+    expect(paused.statusCode).toBe(200);
+
+    const subfamily = await app.inject({
+      method: 'POST',
+      url: '/catalog/subfamilies',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { familyId: fixture.familyId, name: '__tree_archive_test_paused_child__' },
+    });
+    expect(subfamily.statusCode).toBe(201);
+    // Se limpia aqui mismo: `deleteCatalogFixtures` solo borra los ids del
+    // fixture, y esta subfamilia de mas bloquearia el borrado de la familia.
+    await deleteSubfamilyFixture(
+      (subfamily.json() as { subfamily: { id: number } }).subfamily.id,
+    );
+
     await app.inject({
       method: 'PATCH',
       url: `/catalog/families/${fixture.familyId}`,

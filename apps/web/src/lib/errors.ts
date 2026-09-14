@@ -40,6 +40,12 @@ const MESSAGES: Record<string, string> = {
   // Archivar: compartido por ítems, familias y clientes.
   already_archived: 'Ya estaba archivado.',
   not_archived: 'No está archivado.',
+  // Sirve para los tres niveles del árbol, así que no nombra ninguno: lo que
+  // está archivado puede ser el padre directo o cualquier ancestro.
+  parent_archived:
+    'No se puede colgar aquí: la rama está archivada. Restáurala o elige otra.',
+  node_archived: 'Está archivado. Restáuralo antes de editarlo.',
+  not_found: 'Eso ya no existe. Recarga la pantalla.',
 
   // Clientes
   customer_not_found: 'El cliente ya no existe.',

@@ -11,7 +11,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { apiErrorMessage } from '$lib/errors.js';
-	import { defaultParentId, parentOptionLabels } from '$lib/catalog/parents.js';
+	import { archivedAncestor, defaultParentId, parentOptionLabels } from '$lib/catalog/parents.js';
 	import { itemState } from '$lib/status.js';
 	import { toasts } from '$lib/toasts.svelte.js';
 
@@ -97,6 +97,28 @@
 	const familyLabels = $derived(parentOptionLabels(families));
 	const subfamilyLabels = $derived(parentOptionLabels(subfamilies));
 	const categoryLabels = $derived(parentOptionLabels(categories));
+
+	// Igual que en las pantallas del árbol: si algo de la ascendencia está
+	// archivado, la API rechaza el alta, así que no se ofrece.
+	const selectedFamily = $derived(families.find((f) => f.id === selectedFamilyId) ?? null);
+	const selectedSubfamilyNode = $derived(
+		subfamilies.find((sf) => sf.id === selectedSubfamilyId) ?? null,
+	);
+	const selectedCategoryNode = $derived(
+		categories.find((cat) => cat.id === selectedCategoryId) ?? null,
+	);
+	const blockedBy = $derived(
+		archivedAncestor([selectedFamily, selectedSubfamilyNode, selectedCategoryNode]),
+	);
+	const blockedByHref = $derived(
+		blockedBy === null
+			? '/menu/categories'
+			: blockedBy.id === selectedFamily?.id
+				? '/menu/families'
+				: blockedBy.id === selectedSubfamilyNode?.id
+					? '/menu/subfamilies'
+					: '/menu/categories',
+	);
 
 	const selectedCategory = $derived(
 		categories.find((category) => category.id === selectedCategoryId) ?? null,
@@ -405,7 +427,7 @@
 	description="Lo que se vende. Cada ítem cuelga de una categoría y lleva su precio, su impuesto y su estación de cocina."
 >
 	{#snippet actions()}
-		{#if selectedCategoryId !== null && statusFilter !== 'archived'}
+		{#if selectedCategoryId !== null && statusFilter !== 'archived' && blockedBy === null}
 			<Button variant="primary" icon="plus" onclick={startCreate}>Nuevo ítem</Button>
 		{/if}
 	{/snippet}
@@ -450,6 +472,14 @@
 	</Field>
 </div>
 
+{#if blockedBy}
+	<p class="blocked">
+		<strong>«{blockedBy.name}» está archivada.</strong>
+		Sus ítems se siguen viendo aquí, pero no se le puede colgar ninguno nuevo.
+		<a href={blockedByHref}>Restáurala</a> o elige otra rama.
+	</p>
+{/if}
+
 {#if loading}
 	<Skeleton lines={5} />
 {:else if selectedCategoryId === null}
@@ -474,7 +504,7 @@
 						: 'Cambia el filtro de estado para ver los demás.'}
 				>
 					{#snippet action()}
-						{#if statusFilter === 'active'}
+						{#if statusFilter === 'active' && blockedBy === null}
 							<Button variant="primary" icon="plus" onclick={startCreate}>Crear ítem</Button>
 						{/if}
 					{/snippet}
@@ -751,6 +781,15 @@
 
 	.filters :global(.field) {
 		min-width: 150px;
+	}
+
+	.blocked {
+		margin: 0 0 var(--space-4);
+		padding: var(--space-3) var(--space-4);
+		border-left: 3px solid var(--color-warning);
+		border-radius: var(--radius-sm);
+		background: var(--color-warning-tint);
+		font-size: var(--text-sm);
 	}
 
 	.columns {

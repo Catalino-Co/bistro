@@ -359,29 +359,54 @@ export async function isItemSellable(itemId: number): Promise<boolean> {
   return row !== undefined;
 }
 
-/** Si el padre esta archivado, no se le pueden colgar hijos nuevos. */
-export async function isFamilyArchived(id: number): Promise<boolean> {
-  const [row] = await db
-    .select({ archivedAt: schema.families.archivedAt })
-    .from(schema.families)
-    .where(eq(schema.families.id, id));
-  return row?.archivedAt != null;
-}
+/**
+ * Un padre sirve para colgarle hijos nuevos solo si NI EL NI NINGUNO de sus
+ * ancestros esta archivado.
+ *
+ * Mirar solo al padre directo no bastaba: se podia crear una categoria bajo
+ * una subfamilia viva cuya FAMILIA estaba archivada, y esa categoria nacia
+ * invisible -- el picker del POS exige toda la ascendencia vendible
+ * (`sellableWithAncestry`), asi que era fabricar menu que nadie iba a poder
+ * vender, sin un solo aviso.
+ *
+ * Solo mira `archived_at`, nunca `status`: pausar no es retirar. Montar una
+ * rama entera antes de abrirla a la venta tiene que seguir siendo posible.
+ */
+export async function hasArchivedAncestry(
+  level: 'family' | 'subfamily' | 'category',
+  id: number,
+): Promise<boolean> {
+  if (level === 'family') {
+    const [row] = await db
+      .select({ archivedAt: schema.families.archivedAt })
+      .from(schema.families)
+      .where(eq(schema.families.id, id));
+    return row?.archivedAt != null;
+  }
 
-export async function isSubfamilyArchived(id: number): Promise<boolean> {
-  const [row] = await db
-    .select({ archivedAt: schema.subfamilies.archivedAt })
-    .from(schema.subfamilies)
-    .where(eq(schema.subfamilies.id, id));
-  return row?.archivedAt != null;
-}
+  if (level === 'subfamily') {
+    const [row] = await db
+      .select({
+        own: schema.subfamilies.archivedAt,
+        family: schema.families.archivedAt,
+      })
+      .from(schema.subfamilies)
+      .innerJoin(schema.families, eq(schema.families.id, schema.subfamilies.familyId))
+      .where(eq(schema.subfamilies.id, id));
+    return row !== undefined && (row.own != null || row.family != null);
+  }
 
-export async function isCategoryArchived(id: number): Promise<boolean> {
   const [row] = await db
-    .select({ archivedAt: schema.categories.archivedAt })
+    .select({
+      own: schema.categories.archivedAt,
+      subfamily: schema.subfamilies.archivedAt,
+      family: schema.families.archivedAt,
+    })
     .from(schema.categories)
+    .innerJoin(schema.subfamilies, eq(schema.subfamilies.id, schema.categories.subfamilyId))
+    .innerJoin(schema.families, eq(schema.families.id, schema.subfamilies.familyId))
     .where(eq(schema.categories.id, id));
-  return row?.archivedAt != null;
+  return row !== undefined && (row.own != null || row.subfamily != null || row.family != null);
 }
 
 export type ItemStatusFilter = 'active' | 'inactive' | 'archived';

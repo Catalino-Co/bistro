@@ -47,6 +47,23 @@ export function parentOptionLabels(nodes: ParentNode[]): Map<number, string> {
 }
 
 /**
+ * El primer ancestro archivado de la cadena, de la raíz hacia abajo, o `null`
+ * si toda está viva.
+ *
+ * La API rechaza colgar algo nuevo de una rama archivada (409
+ * `parent_archived`), y hasta ahora la pantalla ofrecía el botón igual: se
+ * escribía el nombre, se pulsaba Crear, y salía un aviso genérico. Con esto
+ * la pantalla sabe lo mismo que la API antes de ofrecer nada, y puede decir
+ * CUÁL de los niveles es el archivado.
+ */
+export function archivedAncestor(chain: (ParentNode | null | undefined)[]): ParentNode | null {
+  for (const node of chain) {
+    if (node && node.archivedAt !== null) return node;
+  }
+  return null;
+}
+
+/**
  * Y la selección por defecto tiene que caer en un padre activo: abrir la
  * pantalla apuntando a uno archivado es empezar en el caso raro.
  */

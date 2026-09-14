@@ -19,6 +19,16 @@ export async function deleteKitchenStation(id: number): Promise<void> {
   await db.delete(schema.kitchenStations).where(eq(schema.kitchenStations.id, id));
 }
 
+/**
+ * No hay ruta DELETE para los niveles del arbol (a proposito: se archivan).
+ * Un test que crea uno adrede para comprobar una regla lo limpia con esto,
+ * por id explicito -- si no, el `delete families` del cierre choca contra la
+ * FK del hijo huerfano y deja la suite rota para la siguiente corrida.
+ */
+export async function deleteSubfamilyFixture(id: number): Promise<void> {
+  await db.delete(schema.subfamilies).where(eq(schema.subfamilies.id, id));
+}
+
 export async function deleteCatalogTestData(): Promise<void> {
   const pattern = '\\_\\_catalog\\_test%';
   // items first: its station_id may reference a kitchen_stations row this

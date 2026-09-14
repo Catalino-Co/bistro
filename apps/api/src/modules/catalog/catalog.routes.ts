@@ -2,9 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   archiveItem,
   archiveTreeNode,
-  isFamilyArchived,
-  isSubfamilyArchived,
-  isCategoryArchived,
+  hasArchivedAncestry,
   restoreTreeNode,
   updateTreeNode,
   type TreeLevel,
@@ -102,7 +100,7 @@ export async function catalogRoutes(app: FastifyInstance) {
         return { error: 'invalid_request' };
       }
       // Colgar algo nuevo de un padre archivado es crear basura invisible.
-      if (await isFamilyArchived(parsed.data.familyId)) {
+      if (await hasArchivedAncestry('family', parsed.data.familyId)) {
         reply.code(409);
         return { error: 'parent_archived' };
       }
@@ -133,7 +131,7 @@ export async function catalogRoutes(app: FastifyInstance) {
         reply.code(400);
         return { error: 'invalid_request' };
       }
-      if (await isSubfamilyArchived(parsed.data.subfamilyId)) {
+      if (await hasArchivedAncestry('subfamily', parsed.data.subfamilyId)) {
         reply.code(409);
         return { error: 'parent_archived' };
       }
@@ -170,7 +168,7 @@ export async function catalogRoutes(app: FastifyInstance) {
         reply.code(400);
         return { error: 'invalid_request' };
       }
-      if (await isCategoryArchived(parsed.data.categoryId)) {
+      if (await hasArchivedAncestry('category', parsed.data.categoryId)) {
         reply.code(409);
         return { error: 'parent_archived' };
       }

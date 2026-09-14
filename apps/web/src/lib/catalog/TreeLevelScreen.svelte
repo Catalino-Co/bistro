@@ -12,6 +12,7 @@
 </script>
 
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { apiFetch } from '$lib/api.js';
 	import Badge from '$lib/components/Badge.svelte';
 	import Button from '$lib/components/Button.svelte';
@@ -25,7 +26,7 @@
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { apiErrorMessage } from '$lib/errors.js';
 	import { treeNodeState } from '$lib/status.js';
-	import { defaultParentId, parentOptionLabels } from './parents.js';
+	import { archivedAncestor, defaultParentId, parentOptionLabels } from './parents.js';
 	import { toasts } from '$lib/toasts.svelte.js';
 
 	/**
@@ -118,6 +119,28 @@
 	const parentId = $derived(level === 'subfamily' ? selectedFamilyId : selectedSubfamilyId);
 	const familyLabels = $derived(parentOptionLabels(families));
 	const subfamilyLabels = $derived(parentOptionLabels(subfamilies));
+
+	// La cadena entera, de la raíz hacia abajo. Si algo de ella está archivado
+	// la API va a rechazar cualquier alta (409 `parent_archived`), así que la
+	// pantalla deja de ofrecerla en vez de dejar que falle al guardar.
+	const selectedFamily = $derived(families.find((f) => f.id === selectedFamilyId) ?? null);
+	const selectedSubfamily = $derived(
+		subfamilies.find((sf) => sf.id === selectedSubfamilyId) ?? null,
+	);
+	const blockedBy = $derived(
+		archivedAncestor(level === 'subfamily' ? [selectedFamily] : [selectedFamily, selectedSubfamily]),
+	);
+	/** La pantalla del nivel de arriba, para mandar a crear el padre que falta. */
+	const parentScreen = $derived(
+		level === 'subfamily'
+			? { href: '/menu/families', label: 'Familias' }
+			: { href: '/menu/subfamilies', label: 'Subfamilias' },
+	);
+
+	/** La pantalla donde se restaura lo que está bloqueando. */
+	const blockedByHref = $derived(
+		blockedBy && blockedBy.id === selectedFamily?.id ? '/menu/families' : '/menu/subfamilies',
+	);
 
 	let formOpen = $state(false);
 	let formMode = $state<'create' | 'edit'>('create');
@@ -262,7 +285,7 @@
 
 <PageHeader title={copy.plural} description={copy.description}>
 	{#snippet actions()}
-		{#if statusFilter !== 'archived' && (!copy.parent || parentId !== null)}
+		{#if statusFilter !== 'archived' && blockedBy === null && (!copy.parent || parentId !== null)}
 			<Button variant="primary" icon="plus" onclick={startCreate}>
 				Nueva {copy.singular}
 			</Button>
@@ -306,14 +329,28 @@
 	</Field>
 </div>
 
+{#if blockedBy}
+	<p class="blocked">
+		<strong>«{blockedBy.name}» está archivada.</strong>
+		Lo que cuelga de ella se sigue viendo aquí, pero no se le puede colgar nada nuevo.
+		<a href={blockedByHref}>Restáurala</a> o elige otra.
+	</p>
+{/if}
+
 {#if loading}
 	<Skeleton lines={4} />
 {:else if copy.parent && parentId === null}
 	<EmptyState
 		icon="catalog"
 		title="No hay {copy.parent.plural} donde crear una {copy.singular}"
-		description="Crea primero {copy.parent.singular} y vuelve aquí."
-	/>
+		description="Una {copy.singular} vive dentro de {copy.parent.singular}, así que hay que empezar por ahí."
+	>
+		{#snippet action()}
+			<Button variant="primary" onclick={() => goto(parentScreen.href)}>
+				Ir a {parentScreen.label}
+			</Button>
+		{/snippet}
+	</EmptyState>
 {:else if nodes.length === 0}
 	<EmptyState
 		icon="catalog"
@@ -327,7 +364,7 @@
 			: 'Cambia el filtro de estado para ver las demás.'}
 	>
 		{#snippet action()}
-			{#if statusFilter === 'active'}
+			{#if statusFilter === 'active' && blockedBy === null}
 				<Button variant="primary" icon="plus" onclick={startCreate}>
 					Nueva {copy.singular}
 				</Button>
@@ -414,5 +451,14 @@
 
 	.filters :global(.field) {
 		min-width: 200px;
+	}
+
+	.blocked {
+		margin: 0 0 var(--space-4);
+		padding: var(--space-3) var(--space-4);
+		border-left: 3px solid var(--color-warning);
+		border-radius: var(--radius-sm);
+		background: var(--color-warning-tint);
+		font-size: var(--text-sm);
 	}
 </style>
