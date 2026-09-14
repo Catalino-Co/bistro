@@ -52,10 +52,18 @@ export const NAV_GROUPS: NavGroup[] = [
 // `docs/ui-standards.md`. Las que aún no existen se marcan en vez de
 // desaparecer: preferimos enseñar la estructura completa a esconderla.
 //
-// El orden es el del montaje de un local: primero dónde se vende, luego
-// cómo sale la comida, luego con qué se cobra, luego quién entra, y al
-// final el registro de lo que se hizo.
+// «Sucursal activa» va primero porque es la única que usa todo el mundo y
+// a diario -- las demás se tocan al montar el local. El resto va en el
+// orden de ese montaje: primero dónde se vende, luego cómo sale la comida,
+// luego con qué se cobra, luego quién entra, y al final el registro de lo
+// que se hizo.
 export const SETTINGS_ITEMS: CardNavItem[] = [
+  {
+    href: '/settings/branch',
+    label: 'Sucursal activa',
+    description: 'En qué local estás trabajando ahora mismo',
+    icon: 'switch',
+  },
   {
     href: '/settings/branches',
     label: 'Sucursales',
