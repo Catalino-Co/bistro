@@ -58,10 +58,11 @@ export async function ordersRoutes(app: FastifyInstance) {
       reply.code(400);
       return { error: 'invalid_request' };
     }
-    const { status, from, to, search, limit } = parsed.data;
+    const { status, customerId, from, to, search, limit } = parsed.data;
     return {
       orders: await listOrders(branchId, {
         status,
+        customerId,
         from: from ? new Date(from) : undefined,
         to: to ? new Date(to) : undefined,
         search,

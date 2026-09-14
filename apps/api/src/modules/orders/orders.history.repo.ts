@@ -19,6 +19,7 @@ export interface OrderHistoryRow {
 
 export interface OrderHistoryFilters {
   status?: 'open' | 'closed' | undefined;
+  customerId?: number | undefined;
   from?: Date | undefined;
   to?: Date | undefined;
   search?: string | undefined;
@@ -44,6 +45,9 @@ export async function listOrders(
   const conditions: SQL[] = [eq(schema.orders.branchId, branchId)];
   if (filters.status) {
     conditions.push(eq(schema.orders.status, filters.status));
+  }
+  if (filters.customerId !== undefined) {
+    conditions.push(eq(schema.orders.customerId, filters.customerId));
   }
   if (filters.from) {
     conditions.push(gte(schema.orders.openedAt, filters.from));

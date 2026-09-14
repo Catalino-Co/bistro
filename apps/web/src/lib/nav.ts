@@ -34,7 +34,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Administración',
     items: [
       { href: '/menu', label: 'Catálogo', icon: 'catalog' },
-      { href: '/customers', label: 'Clientes', icon: 'customer', pending: 'Fase 5' },
+      { href: '/customers', label: 'Clientes', icon: 'customer' },
     ],
   },
   {

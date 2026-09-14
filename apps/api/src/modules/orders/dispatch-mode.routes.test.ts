@@ -33,8 +33,8 @@ describe('order dispatch modes', () => {
     await assignRole(userId, 'admin', branch.branchId);
     dineAreaId = (await createDineArea(branch.branchId, '__dispatch_mode_test_area__')).id;
 
-    const guestTypeId = await findCustomerTypeIdByName('Hotel Guest');
-    const externalTypeId = await findCustomerTypeIdByName('External');
+    const guestTypeId = await findCustomerTypeIdByName('Huésped');
+    const externalTypeId = await findCustomerTypeIdByName('Externo');
     guestCustomerId = await createCustomerFixture('guest', guestTypeId);
     externalCustomerId = await createCustomerFixture('external', externalTypeId);
 

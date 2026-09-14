@@ -28,7 +28,7 @@ describe('customers routes', () => {
     const userId = await createTestUser(USERNAME, PASSWORD);
     branch = await createBranchFixture('customers');
     await assignRole(userId, 'admin', branch.branchId);
-    guestTypeId = await findCustomerTypeIdByName('Hotel Guest');
+    guestTypeId = await findCustomerTypeIdByName('Huésped');
 
     const primed = await app.inject({ method: 'GET', url: '/health' });
     const sessionCookie = findCookiePair(primed.headers['set-cookie'], 'sessionId');
@@ -72,8 +72,8 @@ describe('customers routes', () => {
     ).customerTypes;
     expect(types).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: 'Hotel Guest', allowsRoomService: true }),
-        expect.objectContaining({ name: 'External', allowsRoomService: false }),
+        expect.objectContaining({ name: 'Huésped', allowsRoomService: true }),
+        expect.objectContaining({ name: 'Externo', allowsRoomService: false }),
       ]),
     );
   });
@@ -88,12 +88,17 @@ describe('customers routes', () => {
     expect(created.statusCode).toBe(201);
     const customer = (
       created.json() as {
-        customer: { id: number; name: string; customerTypeName: string; allowsRoomService: boolean };
+        customer: {
+          id: number;
+          name: string;
+          customerTypeName: string;
+          allowsRoomService: boolean;
+        };
       }
     ).customer;
     expect(customer).toMatchObject({
       name: '__customers_test_guest__',
-      customerTypeName: 'Hotel Guest',
+      customerTypeName: 'Huésped',
       allowsRoomService: true,
     });
     createdCustomerIds.push(customer.id);

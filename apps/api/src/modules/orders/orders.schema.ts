@@ -28,6 +28,7 @@ export const voidOrderLineBodySchema = z.object({
 // quien mira la pantalla.
 export const listOrdersQuerySchema = z.object({
   status: z.enum(['open', 'closed']).optional(),
+  customerId: z.coerce.number().int().positive().optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   search: z.string().min(1).max(100).optional(),

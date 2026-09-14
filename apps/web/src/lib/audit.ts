@@ -41,6 +41,22 @@ export const AUDIT_ACTIONS: Record<string, AuditActionCopy> = {
   'catalog.item_archived': { label: 'Ítem archivado', tone: 'warning' },
   'catalog.item_restored': { label: 'Ítem restaurado', tone: 'primary' },
 
+  'catalog.category_updated': { label: 'Categoría editada', tone: 'neutral' },
+  'catalog.category_archived': { label: 'Categoría archivada', tone: 'warning' },
+  'catalog.category_restored': { label: 'Categoría restaurada', tone: 'primary' },
+  'catalog.family_updated': { label: 'Familia editada', tone: 'neutral' },
+  'catalog.family_archived': { label: 'Familia archivada', tone: 'warning' },
+  'catalog.family_restored': { label: 'Familia restaurada', tone: 'primary' },
+  'catalog.subfamily_updated': { label: 'Subfamilia editada', tone: 'neutral' },
+  'catalog.subfamily_archived': { label: 'Subfamilia archivada', tone: 'warning' },
+  'catalog.subfamily_restored': { label: 'Subfamilia restaurada', tone: 'primary' },
+
+  'order.bill_printed': { label: 'Cuenta impresa', tone: 'neutral' },
+
+  'customers.updated': { label: 'Cliente modificado', tone: 'neutral' },
+  'customers.archived': { label: 'Cliente archivado', tone: 'warning' },
+  'customers.restored': { label: 'Cliente restaurado', tone: 'primary' },
+
   'org.company_created': { label: 'Compañía creada', tone: 'primary' },
   'org.business_unit_created': { label: 'Unidad de negocio creada', tone: 'primary' },
   'org.branch_created': { label: 'Sucursal creada', tone: 'primary' },
@@ -60,6 +76,10 @@ const ENTITY_TYPES: Record<string, string> = {
   branch: 'Sucursal',
   order_line: 'Línea de orden',
   item: 'Ítem',
+  category: 'Categoría',
+  family: 'Familia',
+  subfamily: 'Subfamilia',
+  customer: 'Cliente',
   order: 'Orden',
   permission: 'Permiso',
 };
@@ -73,6 +93,9 @@ const FIELD_LABELS: Record<string, string> = {
   name: 'Nombre',
   price: 'Precio',
   taxRateId: 'Impuesto',
+  phone: 'Teléfono',
+  taxId: 'RNC',
+  customerTypeId: 'Tipo de cliente',
   archivedAt: 'Archivado el',
   fullName: 'Nombre completo',
   username: 'Usuario',
@@ -87,6 +110,8 @@ const FIELD_LABELS: Record<string, string> = {
   quantity: 'Cantidad',
   note: 'Nota',
   reason: 'Motivo',
+  reprintNumber: 'Reimpresión número',
+  total: 'Total',
 };
 
 export function fieldLabel(key: string): string {

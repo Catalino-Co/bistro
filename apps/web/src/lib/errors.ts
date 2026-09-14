@@ -35,9 +35,16 @@ const MESSAGES: Record<string, string> = {
   // Catálogo
   item_not_available: 'Ese ítem ya no está disponible para la venta. Recarga el menú.',
   item_archived: 'Ese ítem está archivado. Restáuralo antes de editarlo.',
-  already_archived: 'Ese ítem ya estaba archivado.',
-  not_archived: 'Ese ítem no está archivado.',
   tax_rate_not_found: 'Ese impuesto ya no existe.',
+
+  // Archivar: compartido por ítems, categorías y clientes.
+  already_archived: 'Ya estaba archivado.',
+  not_archived: 'No está archivado.',
+
+  // Clientes
+  customer_not_found: 'El cliente ya no existe.',
+  customer_archived: 'Ese cliente está archivado. Restáuralo antes de editarlo.',
+  customer_type_not_found: 'Ese tipo de cliente ya no existe.',
 
   // Usuarios y organización
   username_taken: 'Ese nombre de usuario ya está en uso.',

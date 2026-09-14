@@ -141,6 +141,13 @@
       "when": 1789348064226,
       "tag": "0019_puzzling_demogoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789349770132,
+      "tag": "0020_soft_bill_hollister",
+      "breakpoints": true
     }
   ]
 }
