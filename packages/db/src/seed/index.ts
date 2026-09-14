@@ -1,6 +1,7 @@
 import { pool } from '../client.js';
 import { seedCustomerTypes } from './customer-types.js';
 import { seedDemoBranches } from './demo-branches.js';
+import { seedDemoCustomers } from './demo-customers.js';
 import { seedPaymentMethods } from './payment-methods.js';
 import { seedPermissions } from './permissions.js';
 import { seedAdminRole } from './roles.js';
@@ -13,6 +14,7 @@ async function main() {
   await seedCustomerTypes();
   await seedPaymentMethods();
   await seedDemoBranches();
+  await seedDemoCustomers();
   await pool.end();
   console.log('Seed complete.');
 }
