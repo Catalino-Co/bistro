@@ -3,7 +3,7 @@
  * porque una rama puede colgar de un padre pausado o archivado y sin eso
  * quedaría fuera del alcance de la pantalla.
  *
- * Eso obliga a dos cosas, y las dos viven aquí para que no se apliquen en
+ * Eso obliga a tres cosas, y las tres viven aquí para que no se apliquen en
  * una pantalla y se olviden en la otra.
  */
 export interface ParentNode {
@@ -13,16 +13,37 @@ export interface ParentNode {
   archivedAt: string | null;
 }
 
+function stateSuffix(node: ParentNode): string {
+  if (node.archivedAt) return ' · archivada';
+  if (node.status !== 'active') return ' · inactiva';
+  return '';
+}
+
 /**
- * Un padre archivado se ve idéntico a uno activo si solo se pinta su nombre
- * -- y en esta base hay dos familias llamadas «Bebidas», una archivada con
- * todo el menú debajo y otra recién creada y vacía. Sin el sufijo, elegir la
- * equivocada deja la lista en blanco sin decir por qué.
+ * Las etiquetas del selector, calculadas sobre la lista entera y no una a
+ * una, porque las dos razones para no poder distinguir dos opciones solo se
+ * ven mirando al resto:
+ *
+ * 1. El estado. Un padre archivado se ve idéntico a uno activo si solo se
+ *    pinta su nombre, y elegir el equivocado deja la lista en blanco sin
+ *    decir por qué.
+ * 2. El nombre repetido. Nada impide llamar «Bebidas» a dos familias -- y
+ *    en un restaurante de verdad pasa, con «Postres» de cocina y «Postres»
+ *    de bar. Cuando el nombre y el estado no bastan, el id es feo pero es lo
+ *    único que de verdad las separa, y además invita a renombrar una.
  */
-export function parentOptionLabel(node: ParentNode): string {
-  if (node.archivedAt) return `${node.name} · archivada`;
-  if (node.status !== 'active') return `${node.name} · inactiva`;
-  return node.name;
+export function parentOptionLabels(nodes: ParentNode[]): Map<number, string> {
+  const labels = new Map<number, string>();
+  const seen = new Map<string, number>();
+  for (const node of nodes) {
+    const label = `${node.name}${stateSuffix(node)}`;
+    seen.set(label, (seen.get(label) ?? 0) + 1);
+  }
+  for (const node of nodes) {
+    const label = `${node.name}${stateSuffix(node)}`;
+    labels.set(node.id, (seen.get(label) ?? 0) > 1 ? `${label} · #${node.id}` : label);
+  }
+  return labels;
 }
 
 /**

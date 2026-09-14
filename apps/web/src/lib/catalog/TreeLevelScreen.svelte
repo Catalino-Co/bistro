@@ -25,7 +25,7 @@
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { apiErrorMessage } from '$lib/errors.js';
 	import { treeNodeState } from '$lib/status.js';
-	import { defaultParentId, parentOptionLabel } from './parents.js';
+	import { defaultParentId, parentOptionLabels } from './parents.js';
 	import { toasts } from '$lib/toasts.svelte.js';
 
 	/**
@@ -116,6 +116,8 @@
 	let selectedSubfamilyId = $state<number | null>(null);
 
 	const parentId = $derived(level === 'subfamily' ? selectedFamilyId : selectedSubfamilyId);
+	const familyLabels = $derived(parentOptionLabels(families));
+	const subfamilyLabels = $derived(parentOptionLabels(subfamilies));
 
 	let formOpen = $state(false);
 	let formMode = $state<'create' | 'edit'>('create');
@@ -274,7 +276,7 @@
 			{#snippet control({ id })}
 				<select {id} bind:value={selectedFamilyId} onchange={changeFamily}>
 					{#each families as family (family.id)}
-						<option value={family.id}>{parentOptionLabel(family)}</option>
+						<option value={family.id}>{familyLabels.get(family.id)}</option>
 					{/each}
 				</select>
 			{/snippet}
@@ -286,7 +288,7 @@
 			{#snippet control({ id })}
 				<select {id} bind:value={selectedSubfamilyId} onchange={() => load()}>
 					{#each subfamilies as subfamily (subfamily.id)}
-						<option value={subfamily.id}>{parentOptionLabel(subfamily)}</option>
+						<option value={subfamily.id}>{subfamilyLabels.get(subfamily.id)}</option>
 					{/each}
 				</select>
 			{/snippet}
@@ -321,7 +323,7 @@
 				? 'Ninguna en pausa'
 				: 'Nada archivado aquí'}
 		description={statusFilter === 'active'
-			? `Crea la primera para empezar a colgar de ella.`
+			? 'Crea la primera, o cambia el filtro de estado si la pausaste o la archivaste.'
 			: 'Cambia el filtro de estado para ver las demás.'}
 	>
 		{#snippet action()}

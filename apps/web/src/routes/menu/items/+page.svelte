@@ -11,7 +11,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { apiErrorMessage } from '$lib/errors.js';
-	import { defaultParentId, parentOptionLabel } from '$lib/catalog/parents.js';
+	import { defaultParentId, parentOptionLabels } from '$lib/catalog/parents.js';
 	import { itemState } from '$lib/status.js';
 	import { toasts } from '$lib/toasts.svelte.js';
 
@@ -94,6 +94,10 @@
 	let modifierGroupToAssociate = $state<number | null>(null);
 
 	const selectedItem = $derived(items.find((item) => item.id === selectedItemId) ?? null);
+	const familyLabels = $derived(parentOptionLabels(families));
+	const subfamilyLabels = $derived(parentOptionLabels(subfamilies));
+	const categoryLabels = $derived(parentOptionLabels(categories));
+
 	const selectedCategory = $derived(
 		categories.find((category) => category.id === selectedCategoryId) ?? null,
 	);
@@ -412,7 +416,7 @@
 		{#snippet control({ id })}
 			<select {id} bind:value={selectedFamilyId} onchange={changeFamily}>
 				{#each families as family (family.id)}
-					<option value={family.id}>{parentOptionLabel(family)}</option>
+					<option value={family.id}>{familyLabels.get(family.id)}</option>
 				{/each}
 			</select>
 		{/snippet}
@@ -421,7 +425,7 @@
 		{#snippet control({ id })}
 			<select {id} bind:value={selectedSubfamilyId} onchange={changeSubfamily}>
 				{#each subfamilies as subfamily (subfamily.id)}
-					<option value={subfamily.id}>{parentOptionLabel(subfamily)}</option>
+					<option value={subfamily.id}>{subfamilyLabels.get(subfamily.id)}</option>
 				{/each}
 			</select>
 		{/snippet}
@@ -430,7 +434,7 @@
 		{#snippet control({ id })}
 			<select {id} bind:value={selectedCategoryId} onchange={() => loadItems()}>
 				{#each categories as category (category.id)}
-					<option value={category.id}>{parentOptionLabel(category)}</option>
+					<option value={category.id}>{categoryLabels.get(category.id)}</option>
 				{/each}
 			</select>
 		{/snippet}
