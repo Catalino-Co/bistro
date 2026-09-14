@@ -9,7 +9,9 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { apiErrorMessage } from '$lib/errors.js';
+	import { itemState } from '$lib/status.js';
 	import { toasts } from '$lib/toasts.svelte.js';
 
 	interface Category {
@@ -33,6 +35,8 @@
 		price: string;
 		taxRateId: number;
 		stationId: number | null;
+		status: 'active' | 'inactive';
+		archivedAt: string | null;
 	}
 	interface TaxRate {
 		id: number;
@@ -50,6 +54,13 @@
 
 	type Level = 'category' | 'family' | 'subfamily';
 	type DetailTab = 'datos' | 'modificadores' | 'estacion';
+	type ItemStatusFilter = 'active' | 'inactive' | 'archived';
+
+	const ITEM_FILTERS: { value: ItemStatusFilter; label: string }[] = [
+		{ value: 'active', label: 'Activos' },
+		{ value: 'inactive', label: 'Inactivos' },
+		{ value: 'archived', label: 'Archivados' },
+	];
 
 	let categories = $state<Category[]>([]);
 	let families = $state<Family[]>([]);
@@ -72,13 +83,21 @@
 	let levelName = $state('');
 	let savingLevel = $state(false);
 
-	// --- alta de ítems ---
+	// --- alta y edición de ítems ---
+	// Un solo juego de estado para las dos cosas: el formulario es el mismo y
+	// tenerlo duplicado era la vía rápida a que se separaran.
 	let itemFormOpen = $state(false);
+	let itemFormMode = $state<'create' | 'edit'>('create');
+	let editingItemId = $state<number | null>(null);
 	let itemName = $state('');
 	let itemPrice = $state('');
 	let itemTaxRateId = $state<number | null>(null);
 	let itemStationId = $state<number | null>(null);
+	let itemStatus = $state<'active' | 'inactive'>('active');
 	let savingItem = $state(false);
+
+	let itemStatusFilter = $state<ItemStatusFilter>('active');
+	let itemToArchive = $state<Item | null>(null);
 
 	let modifierGroupToAssociate = $state<number | null>(null);
 
@@ -138,10 +157,25 @@
 	}
 
 	async function loadItems(subfamilyId: number) {
-		const response = await apiFetch(`/catalog/items?subfamilyId=${subfamilyId}`);
+		const response = await apiFetch(
+			`/catalog/items?subfamilyId=${subfamilyId}&status=${itemStatusFilter}`,
+		);
 		if (response.ok) {
 			items = ((await response.json()) as { items: Item[] }).items;
 		}
+	}
+
+	function changeItemFilter() {
+		selectedItemId = null;
+		if (selectedSubfamilyId !== null) loadItems(selectedSubfamilyId);
+	}
+
+	function archivedOn(item: Item): string {
+		return new Date(item.archivedAt!).toLocaleDateString('es-DO', {
+			day: '2-digit',
+			month: 'long',
+			year: 'numeric',
+		});
 	}
 
 	async function loadKitchenStations() {
@@ -244,39 +278,90 @@
 	}
 
 	function startCreateItem() {
+		itemFormMode = 'create';
+		editingItemId = null;
 		itemName = '';
 		itemPrice = '';
 		itemStationId = null;
+		itemStatus = 'active';
 		itemFormOpen = true;
 	}
 
-	async function createItem() {
+	function startEditItem(item: Item) {
+		itemFormMode = 'edit';
+		editingItemId = item.id;
+		itemName = item.name;
+		itemPrice = Number(item.price).toFixed(2);
+		itemTaxRateId = item.taxRateId;
+		itemStatus = item.status;
+		itemFormOpen = true;
+	}
+
+	async function saveItem() {
 		const name = itemName.trim();
 		const price = itemPrice.trim();
 		if (!name || !price || selectedSubfamilyId === null || itemTaxRateId === null) return;
 
+		const editing = itemFormMode === 'edit' && editingItemId !== null;
 		savingItem = true;
 		try {
-			const response = await apiFetch('/catalog/items', {
-				method: 'POST',
-				body: JSON.stringify({
-					subfamilyId: selectedSubfamilyId,
-					name,
-					price,
-					taxRateId: itemTaxRateId,
-					stationId: itemStationId ?? undefined,
-				}),
-			});
+			const response = await apiFetch(
+				editing ? `/catalog/items/${editingItemId}` : '/catalog/items',
+				{
+					method: editing ? 'PATCH' : 'POST',
+					body: JSON.stringify(
+						editing
+							? { name, price, taxRateId: itemTaxRateId, status: itemStatus }
+							: {
+									subfamilyId: selectedSubfamilyId,
+									name,
+									price,
+									taxRateId: itemTaxRateId,
+									stationId: itemStationId ?? undefined,
+								},
+					),
+				},
+			);
 			if (!response.ok) {
-				toasts.error(await apiErrorMessage(response, 'No se pudo crear el ítem.'));
+				toasts.error(
+					await apiErrorMessage(
+						response,
+						editing ? 'No se pudo guardar el ítem.' : 'No se pudo crear el ítem.',
+					),
+				);
 				return;
 			}
 			itemFormOpen = false;
 			await loadItems(selectedSubfamilyId);
-			toasts.success(`Ítem «${name}» creado.`);
+			toasts.success(editing ? `Ítem «${name}» actualizado.` : `Ítem «${name}» creado.`);
 		} finally {
 			savingItem = false;
 		}
+	}
+
+	async function archiveItem() {
+		const item = itemToArchive;
+		if (!item || selectedSubfamilyId === null) return;
+		const response = await apiFetch(`/catalog/items/${item.id}/archive`, { method: 'POST' });
+		if (!response.ok) {
+			toasts.error(await apiErrorMessage(response, 'No se pudo archivar el ítem.'));
+			return;
+		}
+		selectedItemId = null;
+		await loadItems(selectedSubfamilyId);
+		toasts.success(`«${item.name}» archivado. Lo encuentras en el filtro Archivados.`);
+	}
+
+	async function restoreItem(item: Item) {
+		if (selectedSubfamilyId === null) return;
+		const response = await apiFetch(`/catalog/items/${item.id}/restore`, { method: 'POST' });
+		if (!response.ok) {
+			toasts.error(await apiErrorMessage(response, 'No se pudo restaurar el ítem.'));
+			return;
+		}
+		selectedItemId = null;
+		await loadItems(selectedSubfamilyId);
+		toasts.success(`«${item.name}» restaurado como inactivo. Actívalo para volver a venderlo.`);
 	}
 
 	async function setItemStation(stationId: number | null) {
@@ -427,11 +512,22 @@
 		<div class="detail-col">
 			<header>
 				<h2>Ítems{selectedSubfamily ? ` de ${selectedSubfamily.name}` : ''}</h2>
-				{#if selectedSubfamilyId !== null}
-					<Button size="sm" variant="secondary" icon="plus" onclick={startCreateItem}>
-						Nuevo ítem
-					</Button>
-				{/if}
+				<div class="item-actions">
+					<select
+						aria-label="Estado de los ítems"
+						bind:value={itemStatusFilter}
+						onchange={changeItemFilter}
+					>
+						{#each ITEM_FILTERS as filter (filter.value)}
+							<option value={filter.value}>{filter.label}</option>
+						{/each}
+					</select>
+					{#if selectedSubfamilyId !== null && itemStatusFilter !== 'archived'}
+						<Button size="sm" variant="secondary" icon="plus" onclick={startCreateItem}>
+							Nuevo ítem
+						</Button>
+					{/if}
+				</div>
 			</header>
 
 			{#if selectedSubfamilyId === null}
@@ -443,23 +539,34 @@
 			{:else if items.length === 0}
 				<EmptyState
 					icon="plate"
-					title="Esta subfamilia no tiene ítems"
-					description="Añade el primero para que aparezca en el POS."
+					title={itemStatusFilter === 'active'
+						? 'Esta subfamilia no tiene ítems activos'
+						: itemStatusFilter === 'inactive'
+							? 'Ninguno en pausa'
+							: 'Nada archivado aquí'}
+					description={itemStatusFilter === 'active'
+						? 'Añade el primero para que aparezca en el POS.'
+						: 'Cambia el filtro de estado para ver los demás.'}
 				>
 					{#snippet action()}
-						<Button variant="primary" icon="plus" onclick={startCreateItem}>Crear ítem</Button>
+						{#if itemStatusFilter === 'active'}
+							<Button variant="primary" icon="plus" onclick={startCreateItem}>Crear ítem</Button>
+						{/if}
 					{/snippet}
 				</EmptyState>
 			{:else}
 				<DataList>
 					{#each items as item (item.id)}
+						{@const state = itemState(item)}
 						<DataListRow
 							title={item.name}
 							meta={money(item.price)}
 							selected={item.id === selectedItemId}
 							onclick={() => selectItem(item.id)}
 						>
-							{#if item.stationId === null}
+							{#if item.archivedAt || item.status !== 'active'}
+								<Badge tone={state.tone}>{state.label}</Badge>
+							{:else if item.stationId === null}
 								<Badge tone="warning">Sin estación</Badge>
 							{:else}
 								<Badge tone="neutral">{stationName(item.stationId)}</Badge>
@@ -482,10 +589,36 @@
 					<header class="panel-header">
 						<div>
 							<h2>{selectedItem.name}</h2>
-							<p class="muted">{money(selectedItem.price)} · {taxRateName(selectedItem.taxRateId)}</p>
+							<p class="muted">
+								{money(selectedItem.price)} · {taxRateName(selectedItem.taxRateId)}
+								{#if selectedItem.archivedAt}
+									· archivado el {archivedOn(selectedItem)}
+								{/if}
+							</p>
+						</div>
+						<div class="panel-actions">
+							{#if selectedItem.archivedAt}
+								<Button variant="secondary" onclick={() => restoreItem(selectedItem!)}>
+									Restaurar
+								</Button>
+							{:else}
+								<Button variant="secondary" icon="edit" onclick={() => startEditItem(selectedItem!)}>
+									Editar
+								</Button>
+								<Button variant="danger" onclick={() => (itemToArchive = selectedItem)}>
+									Archivar
+								</Button>
+							{/if}
 						</div>
 					</header>
 
+					<!-- Un ítem archivado es de solo lectura: escribirle modificadores o
+					     estación a algo que nadie ve es confusión pura.
+					     Se quita del DOM en vez de usar el atributo `hidden`: la regla
+					     `display: flex` de abajo le gana al `display: none` que el
+					     navegador aplica por defecto a `[hidden]`, así que el atributo
+					     solo no oculta nada. -->
+					{#if selectedItem.archivedAt === null}
 					<div class="panel-tabs" role="tablist" aria-label="Detalle del ítem">
 						{#each [['datos', 'Datos'], ['modificadores', 'Modificadores'], ['estacion', 'Estación']] as tab (tab[0])}
 							<button
@@ -501,9 +634,10 @@
 							</button>
 						{/each}
 					</div>
+					{/if}
 
 					<div class="panel-body">
-						{#if detailTab === 'datos'}
+						{#if detailTab === 'datos' || selectedItem.archivedAt}
 							<dl class="facts">
 								<dt>Precio</dt>
 								<dd>{money(selectedItem.price)}</dd>
@@ -512,10 +646,12 @@
 								<dt>Estación</dt>
 								<dd>{stationName(selectedItem.stationId)}</dd>
 							</dl>
-							<p class="muted">
-								Editar nombre y precio todavía no existe en la API; por ahora un cambio de precio
-								se hace creando un ítem nuevo.
-							</p>
+							{#if selectedItem.archivedAt}
+								<p class="muted">
+									Archivado: no aparece en el POS ni en el catálogo. Su historial de ventas está
+									intacto. Restáuralo para poder editarlo.
+								</p>
+							{/if}
 						{:else if detailTab === 'modificadores'}
 							{#if itemModifierGroups.length === 0}
 								<p class="muted">Este ítem no tiene grupos de modificadores.</p>
@@ -608,7 +744,11 @@
 	{/snippet}
 </Modal>
 
-<Modal bind:open={itemFormOpen} title="Nuevo ítem" description={selectedSubfamily?.name}>
+<Modal
+	bind:open={itemFormOpen}
+	title={itemFormMode === 'create' ? 'Nuevo ítem' : 'Editar ítem'}
+	description={selectedSubfamily?.name}
+>
 	<Field label="Nombre" bind:value={itemName} required placeholder="Mofongo de camarones" />
 	<Field
 		label="Precio"
@@ -627,23 +767,49 @@
 			</select>
 		{/snippet}
 	</Field>
-	<Field label="Estación de cocina" hint="Opcional. Se puede asignar después.">
-		{#snippet control({ id })}
-			<select {id} bind:value={itemStationId}>
-				<option value={null}>Sin estación</option>
-				{#each kitchenStations as station (station.id)}
-					<option value={station.id}>{station.name}</option>
-				{/each}
-			</select>
-		{/snippet}
-	</Field>
+	{#if itemFormMode === 'create'}
+		<Field label="Estación de cocina" hint="Opcional. Se puede asignar después.">
+			{#snippet control({ id })}
+				<select {id} bind:value={itemStationId}>
+					<option value={null}>Sin estación</option>
+					{#each kitchenStations as station (station.id)}
+						<option value={station.id}>{station.name}</option>
+					{/each}
+				</select>
+			{/snippet}
+		</Field>
+	{:else}
+		<Field
+			label="Estado"
+			hint="Inactivo lo saca del POS pero lo deja en el catálogo, listo para volver."
+		>
+			{#snippet control({ id })}
+				<select {id} bind:value={itemStatus}>
+					<option value="active">Activo</option>
+					<option value="inactive">Inactivo</option>
+				</select>
+			{/snippet}
+		</Field>
+	{/if}
 	{#snippet footer()}
 		<Button variant="ghost" disabled={savingItem} onclick={() => (itemFormOpen = false)}>
 			Cancelar
 		</Button>
-		<Button variant="primary" loading={savingItem} onclick={createItem}>Crear ítem</Button>
+		<Button variant="primary" loading={savingItem} onclick={saveItem}>
+			{itemFormMode === 'create' ? 'Crear ítem' : 'Guardar cambios'}
+		</Button>
 	{/snippet}
 </Modal>
+
+<ConfirmDialog
+	open={itemToArchive !== null}
+	title="¿Archivar el ítem?"
+	message="«{itemToArchive?.name ??
+		''}» dejará de aparecer en el POS y en el catálogo. No se borra: el historial de ventas y las órdenes abiertas lo conservan, y puedes restaurarlo desde el filtro Archivados."
+	confirmLabel="Archivar"
+	onconfirm={archiveItem}
+	onclose={() => (itemToArchive = null)}
+/>
 
 <style>
 	.tree {
@@ -696,7 +862,29 @@
 	}
 
 	.panel-header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: var(--space-3);
 		padding: var(--space-4) var(--space-4) var(--space-3);
+	}
+
+	.panel-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
+
+	.item-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.item-actions select {
+		min-height: var(--control-h-sm);
+		font-size: var(--text-sm);
 	}
 
 	.panel-tabs {

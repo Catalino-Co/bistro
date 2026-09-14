@@ -40,6 +40,17 @@ export function statusLabel(map: Record<string, StatusLabel>, key: string | null
 }
 
 /**
+ * El estado de un ítem del catálogo sale de dos columnas, igual que el de una
+ * línea: archivado gana sobre el status, porque archivar fuerza `inactive` y
+ * lo que hay que mostrar es el retiro, no la pausa.
+ */
+export function itemState(item: { status: string; archivedAt: string | null }): StatusLabel {
+  if (item.archivedAt) return { label: 'Archivado', tone: 'neutral' };
+  if (item.status === 'active') return { label: 'Activo', tone: 'success' };
+  return { label: 'Inactivo', tone: 'warning' };
+}
+
+/**
  * El estado de una línea no es una columna: sale de la combinación de
  * `voidedAt`, `sentToKitchenAt` y `preparedAt`. El orden de las ramas
  * importa -- una línea anulada lo está aunque ya se hubiera enviado.

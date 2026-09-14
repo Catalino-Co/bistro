@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import {
+  archiveItem,
   createCategory,
   createFamily,
   createItem,
@@ -12,6 +13,8 @@ import {
   listKitchenStations,
   listSubfamilies,
   listTaxRates,
+  restoreItem,
+  updateItem,
   updateItemStation,
   updateKitchenStationPrinter,
 } from './catalog.repo.js';
@@ -21,8 +24,10 @@ import {
   itemStationBodySchema,
   kitchenStationBodySchema,
   kitchenStationPrinterBodySchema,
+  listItemsQuerySchema,
   nameBodySchema,
   subfamilyBodySchema,
+  updateItemBodySchema,
 } from './catalog.schema.js';
 
 const MANAGE_CATALOG = ['catalog.manage'] as const;
@@ -100,18 +105,24 @@ export async function catalogRoutes(app: FastifyInstance) {
     },
   );
 
-  app.get('/catalog/items', { config: { permissions: [...MANAGE_CATALOG] } }, async (request) => {
-    const { subfamilyId } = request.query as { subfamilyId?: string };
-    return { items: await listItems(subfamilyId ? Number(subfamilyId) : undefined) };
-  });
+  app.get(
+    '/catalog/items',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async (request, reply) => {
+      const parsed = listItemsQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: 'invalid_request' };
+      }
+      return { items: await listItems(parsed.data.subfamilyId, parsed.data.status) };
+    },
+  );
 
   // Flat item list with each one's category name joined in, for the POS
   // picker to group by category in a single request.
-  app.get(
-    '/catalog/items/full',
-    { config: { permissions: [...MANAGE_CATALOG] } },
-    async () => ({ items: await listItemsWithCategory() }),
-  );
+  app.get('/catalog/items/full', { config: { permissions: [...MANAGE_CATALOG] } }, async () => ({
+    items: await listItemsWithCategory(),
+  }));
 
   app.post(
     '/catalog/items',
@@ -135,6 +146,92 @@ export async function catalogRoutes(app: FastifyInstance) {
     },
   );
 
+  // Editar un item. Antes de esto no habia forma de cambiarle el nombre ni el
+  // precio: el unico PATCH que existia era el de la estacion.
+  app.patch(
+    '/catalog/items/:id',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async (request, reply) => {
+      const parsed = updateItemBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: 'invalid_request' };
+      }
+
+      const result = await updateItem(
+        Number((request.params as { id: string }).id),
+        parsed.data,
+        request.session.userId!,
+        request.session.branchId,
+      );
+
+      switch (result.outcome) {
+        case 'item_not_found':
+          reply.code(404);
+          return { error: 'item_not_found' };
+        case 'item_archived':
+          reply.code(409);
+          return { error: 'item_archived' };
+        case 'tax_rate_not_found':
+          reply.code(400);
+          return { error: 'tax_rate_not_found' };
+        case 'updated':
+          // 200 con la fila y no 204: el panel de detalle necesita los
+          // valores nuevos para repintarse sin volver a pedir la lista.
+          return { item: result.item };
+      }
+    },
+  );
+
+  // Archivar en vez de borrar. No hay DELETE de items y no debe haberlo:
+  // order_lines.item_id referencia esta fila, asi que borrarla seria borrar
+  // historial de ventas.
+  app.post(
+    '/catalog/items/:id/archive',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async (request, reply) => {
+      const result = await archiveItem(
+        Number((request.params as { id: string }).id),
+        request.session.userId!,
+        request.session.branchId,
+      );
+
+      switch (result.outcome) {
+        case 'item_not_found':
+          reply.code(404);
+          return { error: 'item_not_found' };
+        case 'already_archived':
+          reply.code(409);
+          return { error: 'already_archived' };
+        case 'archived':
+          return { item: result.item };
+      }
+    },
+  );
+
+  app.post(
+    '/catalog/items/:id/restore',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async (request, reply) => {
+      const result = await restoreItem(
+        Number((request.params as { id: string }).id),
+        request.session.userId!,
+        request.session.branchId,
+      );
+
+      switch (result.outcome) {
+        case 'item_not_found':
+          reply.code(404);
+          return { error: 'item_not_found' };
+        case 'not_archived':
+          reply.code(409);
+          return { error: 'not_archived' };
+        case 'restored':
+          return { item: result.item };
+      }
+    },
+  );
+
   app.patch(
     '/catalog/items/:id/station',
     { config: { permissions: [...MANAGE_CATALOG] } },
@@ -144,10 +241,7 @@ export async function catalogRoutes(app: FastifyInstance) {
         reply.code(400);
         return { error: 'invalid_request' };
       }
-      await updateItemStation(
-        Number((request.params as { id: string }).id),
-        parsed.data.stationId,
-      );
+      await updateItemStation(Number((request.params as { id: string }).id), parsed.data.stationId);
       reply.code(204);
       return null;
     },

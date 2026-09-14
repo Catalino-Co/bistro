@@ -37,6 +37,10 @@ export const AUDIT_ACTIONS: Record<string, AuditActionCopy> = {
   'rbac.permission_granted': { label: 'Permiso concedido a un rol', tone: 'warning' },
   'rbac.permission_revoked': { label: 'Permiso retirado de un rol', tone: 'warning' },
 
+  'catalog.item_updated': { label: 'Ítem editado', tone: 'neutral' },
+  'catalog.item_archived': { label: 'Ítem archivado', tone: 'warning' },
+  'catalog.item_restored': { label: 'Ítem restaurado', tone: 'primary' },
+
   'org.company_created': { label: 'Compañía creada', tone: 'primary' },
   'org.business_unit_created': { label: 'Unidad de negocio creada', tone: 'primary' },
   'org.branch_created': { label: 'Sucursal creada', tone: 'primary' },
@@ -55,6 +59,7 @@ const ENTITY_TYPES: Record<string, string> = {
   business_unit: 'Unidad de negocio',
   branch: 'Sucursal',
   order_line: 'Línea de orden',
+  item: 'Ítem',
   order: 'Orden',
   permission: 'Permiso',
 };
@@ -66,6 +71,9 @@ export function entityLabel(entityType: string | null): string | null {
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Nombre',
+  price: 'Precio',
+  taxRateId: 'Impuesto',
+  archivedAt: 'Archivado el',
   fullName: 'Nombre completo',
   username: 'Usuario',
   status: 'Estado',

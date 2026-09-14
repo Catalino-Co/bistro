@@ -1,0 +1,1 @@
+ALTER TABLE "bistro"."items" ADD COLUMN "archived_at" timestamp with time zone;

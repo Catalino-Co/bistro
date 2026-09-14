@@ -1,4 +1,4 @@
-import { bigint, numeric, text } from 'drizzle-orm/pg-core';
+import { bigint, numeric, text, timestamp } from 'drizzle-orm/pg-core';
 import { bistro, statusEnum } from './_shared.js';
 import { taxRates } from './catalog.js';
 import { kitchenStations } from './kitchen.js';
@@ -47,5 +47,20 @@ export const items = bistro.table('items', {
   // still marks fine as "sent to kitchen" -- it just won't show up on any
   // station's ticket view.
   stationId: bigint('station_id', { mode: 'number' }).references(() => kitchenStations.id),
+  // Dos estados que no son lo mismo:
+  //   status  = 'inactive'  -> pausa. Fuera del POS, sigue en el catálogo.
+  //   archivedAt != null    -> retiro. Fuera del catálogo también, recuperable.
+  //
+  // Archivar NO borra: order_lines.item_id referencia esta fila, así que un
+  // DELETE destruiría historial de ventas y por eso no existe. La regla que
+  // acompaña a esto: los joins que resuelven nombre, precio o impuesto de
+  // algo YA vendido (líneas, cuenta, totales, comandas, reportes) nunca
+  // filtran por estado; solo el catálogo y el picker del POS lo hacen.
+  //
+  // Invariante: archivar fuerza status = 'inactive'. Es el seguro -- una
+  // consulta que mire solo `status = 'active'`, incluida una escrita dentro
+  // de un año por alguien que no sepa que esta columna existe, excluye los
+  // archivados por su cuenta.
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
   status: statusEnum('status').notNull().default('active'),
 });

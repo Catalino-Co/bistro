@@ -32,6 +32,13 @@ const MESSAGES: Record<string, string> = {
   // Cocina
   station_not_found: 'La estación ya no existe.',
 
+  // Catálogo
+  item_not_available: 'Ese ítem ya no está disponible para la venta. Recarga el menú.',
+  item_archived: 'Ese ítem está archivado. Restáuralo antes de editarlo.',
+  already_archived: 'Ese ítem ya estaba archivado.',
+  not_archived: 'Ese ítem no está archivado.',
+  tax_rate_not_found: 'Ese impuesto ya no existe.',
+
   // Usuarios y organización
   username_taken: 'Ese nombre de usuario ya está en uso.',
   user_not_found: 'El empleado ya no existe.',

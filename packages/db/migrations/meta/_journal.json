@@ -127,6 +127,13 @@
       "when": 1789257430580,
       "tag": "0017_bitter_morlocks",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789345309602,
+      "tag": "0018_flat_redwing",
+      "breakpoints": true
     }
   ]
 }

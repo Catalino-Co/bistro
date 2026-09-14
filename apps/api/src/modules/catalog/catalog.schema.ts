@@ -22,6 +22,28 @@ export const itemBodySchema = z.object({
   stationId: z.number().int().positive().optional(),
 });
 
+// Lo que se puede editar de un item. `archived` NO esta aqui a proposito:
+// archivar es una accion con su propia ruta, su confirmacion y su clave de
+// bitacora, no un valor mas de un desplegable.
+export const updateItemBodySchema = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    price: z
+      .string()
+      .regex(/^\d+(\.\d{1,4})?$/, 'Expected a decimal string')
+      .optional(),
+    taxRateId: z.number().int().positive().optional(),
+    status: z.enum(['active', 'inactive']).optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, { message: 'nada que actualizar' });
+
+export const listItemsQuerySchema = z.object({
+  subfamilyId: z.coerce.number().int().positive().optional(),
+  // Por defecto lo que se quiere ver primero. Los inactivos y los archivados
+  // estan a un clic en el select del catalogo.
+  status: z.enum(['active', 'inactive', 'archived']).default('active'),
+});
+
 export const itemStationBodySchema = z.object({
   stationId: z.number().int().positive().nullable(),
 });

@@ -294,6 +294,9 @@ export async function ordersRoutes(app: FastifyInstance) {
         case 'item_not_found':
           reply.code(404);
           return { error: 'item_not_found' };
+        case 'item_not_available':
+          reply.code(409);
+          return { error: 'item_not_available' };
         case 'modifier_not_allowed':
           reply.code(400);
           return { error: 'modifier_not_allowed' };

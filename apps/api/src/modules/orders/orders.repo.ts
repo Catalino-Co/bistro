@@ -258,6 +258,10 @@ export type AddOrderLineResult =
   | { outcome: 'order_not_found' }
   | { outcome: 'order_closed' }
   | { outcome: 'item_not_found' }
+  // Inactivo o archivado: una sola salida porque el POS no puede reaccionar
+  // distinto ante las dos. Es una carrera -- el item estaba en el picker
+  // cuando se cargo la pantalla -- y la unica respuesta util es recargar.
+  | { outcome: 'item_not_available' }
   | { outcome: 'modifier_not_allowed' };
 
 // A line's note is per-line by construction (order_lines.note, one column
@@ -284,11 +288,19 @@ export async function addOrderLine(
     }
 
     const [item] = await tx
-      .select({ id: schema.items.id, price: schema.items.price })
+      .select({
+        id: schema.items.id,
+        price: schema.items.price,
+        status: schema.items.status,
+        archivedAt: schema.items.archivedAt,
+      })
       .from(schema.items)
       .where(eq(schema.items.id, itemId));
     if (!item) {
       return { outcome: 'item_not_found' };
+    }
+    if (item.status !== 'active' || item.archivedAt !== null) {
+      return { outcome: 'item_not_available' };
     }
 
     const distinctModifierIds = [...new Set(modifierIds)];

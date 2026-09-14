@@ -185,8 +185,9 @@ describe('catalog routes', () => {
       headers: { cookie, 'x-csrf-token': csrfToken },
       payload: { subfamilyId, name: '__catalog_test_station_item2__', price: '30.00', taxRateId },
     });
-    const noStationItemId = (noStationItem.json() as { item: { id: number; stationId: number | null } })
-      .item.id;
+    const noStationItemId = (
+      noStationItem.json() as { item: { id: number; stationId: number | null } }
+    ).item.id;
     expect(
       (noStationItem.json() as { item: { stationId: number | null } }).item.stationId,
     ).toBeNull();
@@ -205,10 +206,9 @@ describe('catalog routes', () => {
       headers: { cookie },
     });
     const stationsById = new Map(
-      (itemsAfter.json() as { items: { id: number; stationId: number | null }[] }).items.map((i) => [
-        i.id,
-        i.stationId,
-      ]),
+      (itemsAfter.json() as { items: { id: number; stationId: number | null }[] }).items.map(
+        (i) => [i.id, i.stationId],
+      ),
     );
     expect(stationsById.get(itemId)).toBe(stationId);
     expect(stationsById.get(noStationItemId)).toBe(stationId);

@@ -29,6 +29,9 @@
 	interface OrderLine {
 		id: number;
 		itemId: number;
+		// Viene de la API. NO se resuelve contra el array del picker: ese ya no
+		// trae los ítems archivados, y una línea de uno se quedaría sin nombre.
+		itemName: string;
 		quantity: number;
 		note: string | null;
 		unitPrice: string;
@@ -113,7 +116,12 @@
 	let editingLineId = $state<number | null>(null);
 	let kitchenError = $state('');
 
-	function itemName(itemId: number): string {
+	/**
+	 * Solo para el ítem que se está eligiendo en el picker, que por
+	 * construcción siempre está en el array. El nombre de una línea ya
+	 * agregada sale de `line.itemName`.
+	 */
+	function pickerItemName(itemId: number): string {
 		return items.find((i) => i.id === itemId)?.name ?? `Ítem #${itemId}`;
 	}
 
@@ -406,7 +414,7 @@
 
 		{#if selectedItemId !== null}
 			<section class="add-line">
-				<h2>{editingLineId === null ? `Agregar ${itemName(selectedItemId)}` : 'Editar línea'}</h2>
+				<h2>{editingLineId === null ? `Agregar ${pickerItemName(selectedItemId)}` : 'Editar línea'}</h2>
 				<form onsubmit={submitLine}>
 					<div class="field-row">
 						<label>
@@ -463,7 +471,7 @@
 					{#each lines as line (line.id)}
 						<li class:voided={line.voidedAt !== null}>
 							<div class="line-main">
-								<span>{line.quantity}× {itemName(line.itemId)}</span>
+								<span>{line.quantity}× {line.itemName}</span>
 								<span>RD$ {lineTotal(line).toFixed(2)}</span>
 							</div>
 							{#if line.modifiers.length > 0 || line.note}
