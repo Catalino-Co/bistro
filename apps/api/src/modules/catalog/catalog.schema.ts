@@ -32,7 +32,7 @@ export const updateNodeBodySchema = z
   .refine((body) => Object.keys(body).length > 0, { message: 'nada que actualizar' });
 
 export const listNodesQuerySchema = z.object({
-  status: z.enum(['active', 'inactive', 'archived']).default('active'),
+  status: z.enum(['active', 'inactive', 'archived', 'all']).default('active'),
 });
 
 export const listFamiliesQuerySchema = listNodesQuerySchema.extend({

@@ -241,4 +241,39 @@ describe('archiving categories, families and subfamilies', () => {
       expect((await restore(path, 99_999_999)).statusCode).toBe(404);
     }
   });
+
+  it('lists every state at once with status=all, so no branch is unreachable', async () => {
+    // De esto dependen los selectores de padre de las pantallas del catálogo:
+    // una subfamilia puede colgar de una familia pausada, y si el selector
+    // solo ofreciera las activas esa rama entera quedaría fuera del alcance
+    // de la interfaz -- justo lo contrario de archivar en vez de borrar.
+    const query = `?familyId=${fixture.familyId}`;
+    expect((await archive('subfamilies', fixture.subfamilyId)).statusCode).toBe(200);
+
+    expect((await list('subfamilies', `${query}&status=active`)).map((n) => n.id)).not.toContain(
+      fixture.subfamilyId,
+    );
+    expect((await list('subfamilies', `${query}&status=all`)).map((n) => n.id)).toContain(
+      fixture.subfamilyId,
+    );
+
+    // Y `all` no es un cuarto estado: trae exactamente los otros tres juntos.
+    const byState = [
+      ...(await list('subfamilies', `${query}&status=active`)),
+      ...(await list('subfamilies', `${query}&status=inactive`)),
+      ...(await list('subfamilies', `${query}&status=archived`)),
+    ];
+    expect((await list('subfamilies', `${query}&status=all`)).map((n) => n.id).sort()).toEqual(
+      byState.map((n) => n.id).sort(),
+    );
+
+    expect((await restore('subfamilies', fixture.subfamilyId)).statusCode).toBe(200);
+
+    const bogus = await app.inject({
+      method: 'GET',
+      url: `/catalog/subfamilies${query}&status=todas`,
+      headers: { cookie },
+    });
+    expect(bogus.statusCode).toBe(400);
+  });
 });

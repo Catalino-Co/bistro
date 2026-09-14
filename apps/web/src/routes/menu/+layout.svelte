@@ -1,62 +1,49 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { isActive } from '$lib/nav.js';
+	import Icon from '$lib/components/Icon.svelte';
 
-	// Los modificadores dejan de ser una entrada de primer nivel: son parte
-	// del catálogo, no un módulo aparte. En la Fase 2 las dos pestañas se
-	// funden en una vista maestro-detalle sobre el mismo ítem.
+	// Las dos pestañas (Catálogo · Modificadores) se fueron: el módulo tiene
+	// cinco secciones y se entra por tarjetas desde `/menu`. Lo único que
+	// queda aquí es la vuelta al índice, que en una tableta sin botón de
+	// atrás es la diferencia entre navegar y quedarse encerrado.
 	let { children } = $props();
 
-	const TABS = [
-		{ href: '/menu', label: 'Catálogo' },
-		{ href: '/menu/modifiers', label: 'Modificadores' },
-	];
+	const atIndex = $derived(page.url.pathname === '/menu');
 </script>
 
-<nav class="tabs" aria-label="Secciones del catálogo">
-	{#each TABS as tab (tab.href)}
-		{@const active = tab.href === '/menu' ? page.url.pathname === '/menu' : isActive(tab.href, page.url.pathname)}
-		<a href={tab.href} class="tab" class:active aria-current={active ? 'page' : undefined}>
-			{tab.label}
-		</a>
-	{/each}
-</nav>
+{#if !atIndex}
+	<a class="back" href="/menu">
+		<Icon name="chevron" size={16} />
+		Catálogo
+	</a>
+{/if}
 
 {@render children()}
 
 <style>
-	.tabs {
-		display: flex;
-		gap: var(--space-1);
-		border-bottom: 1px solid var(--color-border);
-		margin-bottom: var(--space-5);
-		overflow-x: auto;
-	}
-
-	.tab {
-		display: flex;
+	.back {
+		display: inline-flex;
 		align-items: center;
+		gap: var(--space-1);
 		min-height: var(--touch-min);
-		padding: 0 var(--space-4);
-		border-bottom: 2px solid transparent;
-		margin-bottom: -1px;
+		margin-bottom: var(--space-1);
 		color: var(--color-text-muted);
 		text-decoration: none;
+		font-size: var(--text-sm);
 		font-weight: 600;
-		white-space: nowrap;
 	}
 
-	.tab:hover {
-		color: var(--color-text);
+	.back :global(svg) {
+		transform: rotate(180deg);
 	}
 
-	.tab.active {
+	.back:hover {
 		color: var(--color-primary);
-		border-bottom-color: var(--color-primary);
 	}
 
-	.tab:focus-visible {
+	.back:focus-visible {
 		outline: 2px solid var(--color-primary);
-		outline-offset: -2px;
+		outline-offset: 2px;
+		border-radius: var(--radius-sm);
 	}
 </style>

@@ -35,13 +35,20 @@ const CATEGORY_COLUMNS = {
  * archivado, porque archivar fuerza inactive y si no un archivado saldria
  * tambien bajo "inactivos".
  */
-export type NodeStatusFilter = 'active' | 'inactive' | 'archived';
+// `all` no es un estado mas: es la ausencia de filtro. Lo usan los
+// selectores de padre de las pantallas del arbol -- para elegir bajo que
+// familia va una subfamilia hace falta ver todas las familias, tambien las
+// pausadas y las archivadas, o esas ramas quedan inalcanzables.
+export type NodeStatusFilter = 'active' | 'inactive' | 'archived' | 'all';
 
 function statusCondition(
   statusColumn: PgColumn,
   archivedColumn: PgColumn,
   filter: NodeStatusFilter,
 ) {
+  if (filter === 'all') {
+    return sql`true`;
+  }
   if (filter === 'archived') {
     return sql`${archivedColumn} is not null`;
   }

@@ -1,3 +1,4 @@
+import type { CardNavItem } from './components/CardNav.svelte';
 import type { IconName } from './icons.js';
 
 export interface NavItem {
@@ -58,6 +59,45 @@ export const SETTINGS_ITEMS: NavItem[] = [
   { href: '/settings/users', label: 'Usuarios', icon: 'user' },
   { href: '/settings/roles', label: 'Roles y permisos', icon: 'roles' },
   { href: '/settings/audit', label: 'Auditoría', icon: 'lock' },
+];
+
+// Las secciones del Catálogo, en el orden del árbol: una categoría contiene
+// familias, una familia contiene subfamilias, y los ítems cuelgan de la
+// subfamilia. Los modificadores van al final porque son transversales --
+// se asocian a un ítem, no cuelgan de él.
+//
+// Se dibujan como tarjetas, no como pestañas: ver `docs/ui-standards.md`.
+export const CATALOG_ITEMS: CardNavItem[] = [
+  {
+    href: '/menu/categories',
+    label: 'Categorías',
+    description: 'El primer nivel del menú: Comidas, Bebidas…',
+    icon: 'folder',
+  },
+  {
+    href: '/menu/families',
+    label: 'Familias',
+    description: 'El segundo nivel, dentro de cada categoría',
+    icon: 'layers',
+  },
+  {
+    href: '/menu/subfamilies',
+    label: 'Subfamilias',
+    description: 'El tercer nivel, del que cuelgan los ítems',
+    icon: 'branch',
+  },
+  {
+    href: '/menu/items',
+    label: 'Ítems',
+    description: 'Lo que se vende: precio, impuesto, estación y modificadores',
+    icon: 'plate',
+  },
+  {
+    href: '/menu/modifiers',
+    label: 'Modificadores',
+    description: 'Grupos y opciones que se asocian a un ítem',
+    icon: 'modifiers',
+  },
 ];
 
 /** `/` solo coincide exacto; el resto también con sus rutas hijas. */
