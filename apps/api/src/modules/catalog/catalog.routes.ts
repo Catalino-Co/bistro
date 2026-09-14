@@ -2,23 +2,23 @@ import type { FastifyInstance } from 'fastify';
 import {
   archiveItem,
   archiveTreeNode,
-  isCategoryArchived,
   isFamilyArchived,
   isSubfamilyArchived,
+  isCategoryArchived,
   restoreTreeNode,
   updateTreeNode,
   type TreeLevel,
-  createCategory,
   createFamily,
+  createSubfamily,
   createItem,
   createKitchenStation,
-  createSubfamily,
-  listCategories,
+  createCategory,
   listFamilies,
-  listItems,
-  listItemsWithCategory,
-  listKitchenStations,
   listSubfamilies,
+  listItems,
+  listItemsWithFamily,
+  listKitchenStations,
+  listCategories,
   listTaxRates,
   restoreItem,
   updateItem,
@@ -26,10 +26,10 @@ import {
   updateKitchenStationPrinter,
 } from './catalog.repo.js';
 import {
-  familyBodySchema,
-  listFamiliesQuerySchema,
-  listNodesQuerySchema,
+  subfamilyBodySchema,
   listSubfamiliesQuerySchema,
+  listNodesQuerySchema,
+  listCategoriesQuerySchema,
   updateNodeBodySchema,
   itemBodySchema,
   itemStationBodySchema,
@@ -37,23 +37,23 @@ import {
   kitchenStationPrinterBodySchema,
   listItemsQuerySchema,
   nameBodySchema,
-  subfamilyBodySchema,
+  categoryBodySchema,
   updateItemBodySchema,
 } from './catalog.schema.js';
 
 const MANAGE_CATALOG = ['catalog.manage'] as const;
 
-// The legacy's menu CRUD covered categories/families/items but never let
-// anyone create a subfamily from the UI (rest_insert_category.php never
+// The legacy's menu CRUD covered families/subfamilies/items but never let
+// anyone create a category from the UI (rest_insert_category.php never
 // sent inc_family/inc_subfamily) -- every level here gets the same CRUD,
-// so a subfamily is exactly as easy to create as everything else.
+// so a category is exactly as easy to create as everything else.
 export async function catalogRoutes(app: FastifyInstance) {
   app.get('/catalog/tax-rates', { config: { permissions: [...MANAGE_CATALOG] } }, async () => ({
     taxRates: await listTaxRates(),
   }));
 
   app.get(
-    '/catalog/categories',
+    '/catalog/families',
     { config: { permissions: [...MANAGE_CATALOG] } },
     async (request, reply) => {
       const parsed = listNodesQuerySchema.safeParse(request.query);
@@ -61,12 +61,12 @@ export async function catalogRoutes(app: FastifyInstance) {
         reply.code(400);
         return { error: 'invalid_request' };
       }
-      return { categories: await listCategories(parsed.data.status) };
+      return { families: await listFamilies(parsed.data.status) };
     },
   );
 
   app.post(
-    '/catalog/categories',
+    '/catalog/families',
     { config: { permissions: [...MANAGE_CATALOG] } },
     async (request, reply) => {
       const parsed = nameBodySchema.safeParse(request.body);
@@ -75,39 +75,7 @@ export async function catalogRoutes(app: FastifyInstance) {
         return { error: 'invalid_request' };
       }
       reply.code(201);
-      return { category: await createCategory(parsed.data.name) };
-    },
-  );
-
-  app.get(
-    '/catalog/families',
-    { config: { permissions: [...MANAGE_CATALOG] } },
-    async (request, reply) => {
-      const parsed = listFamiliesQuerySchema.safeParse(request.query);
-      if (!parsed.success) {
-        reply.code(400);
-        return { error: 'invalid_request' };
-      }
-      return { families: await listFamilies(parsed.data.categoryId, parsed.data.status) };
-    },
-  );
-
-  app.post(
-    '/catalog/families',
-    { config: { permissions: [...MANAGE_CATALOG] } },
-    async (request, reply) => {
-      const parsed = familyBodySchema.safeParse(request.body);
-      if (!parsed.success) {
-        reply.code(400);
-        return { error: 'invalid_request' };
-      }
-      // Colgar algo nuevo de un padre archivado es crear basura invisible.
-      if (await isCategoryArchived(parsed.data.categoryId)) {
-        reply.code(409);
-        return { error: 'parent_archived' };
-      }
-      reply.code(201);
-      return { family: await createFamily(parsed.data.categoryId, parsed.data.name) };
+      return { family: await createFamily(parsed.data.name) };
     },
   );
 
@@ -133,12 +101,44 @@ export async function catalogRoutes(app: FastifyInstance) {
         reply.code(400);
         return { error: 'invalid_request' };
       }
+      // Colgar algo nuevo de un padre archivado es crear basura invisible.
       if (await isFamilyArchived(parsed.data.familyId)) {
         reply.code(409);
         return { error: 'parent_archived' };
       }
       reply.code(201);
       return { subfamily: await createSubfamily(parsed.data.familyId, parsed.data.name) };
+    },
+  );
+
+  app.get(
+    '/catalog/categories',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async (request, reply) => {
+      const parsed = listCategoriesQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: 'invalid_request' };
+      }
+      return { categories: await listCategories(parsed.data.subfamilyId, parsed.data.status) };
+    },
+  );
+
+  app.post(
+    '/catalog/categories',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async (request, reply) => {
+      const parsed = categoryBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: 'invalid_request' };
+      }
+      if (await isSubfamilyArchived(parsed.data.subfamilyId)) {
+        reply.code(409);
+        return { error: 'parent_archived' };
+      }
+      reply.code(201);
+      return { category: await createCategory(parsed.data.subfamilyId, parsed.data.name) };
     },
   );
 
@@ -151,14 +151,14 @@ export async function catalogRoutes(app: FastifyInstance) {
         reply.code(400);
         return { error: 'invalid_request' };
       }
-      return { items: await listItems(parsed.data.subfamilyId, parsed.data.status) };
+      return { items: await listItems(parsed.data.categoryId, parsed.data.status) };
     },
   );
 
-  // Flat item list with each one's category name joined in, for the POS
-  // picker to group by category in a single request.
+  // Flat item list with each one's family name joined in, for the POS
+  // picker to group by family in a single request.
   app.get('/catalog/items/full', { config: { permissions: [...MANAGE_CATALOG] } }, async () => ({
-    items: await listItemsWithCategory(),
+    items: await listItemsWithFamily(),
   }));
 
   app.post(
@@ -170,14 +170,14 @@ export async function catalogRoutes(app: FastifyInstance) {
         reply.code(400);
         return { error: 'invalid_request' };
       }
-      if (await isSubfamilyArchived(parsed.data.subfamilyId)) {
+      if (await isCategoryArchived(parsed.data.categoryId)) {
         reply.code(409);
         return { error: 'parent_archived' };
       }
       reply.code(201);
       return {
         item: await createItem(
-          parsed.data.subfamilyId,
+          parsed.data.categoryId,
           parsed.data.name,
           parsed.data.price,
           parsed.data.taxRateId,
@@ -191,9 +191,9 @@ export async function catalogRoutes(app: FastifyInstance) {
   // tres rutas se registran en bucle porque las reglas son identicas: lo unico
   // que cambia es el segmento de la URL y la tabla detras.
   const TREE_ROUTES: { path: string; level: TreeLevel }[] = [
-    { path: 'categories', level: 'category' },
     { path: 'families', level: 'family' },
     { path: 'subfamilies', level: 'subfamily' },
+    { path: 'categories', level: 'category' },
   ];
 
   for (const { path, level } of TREE_ROUTES) {

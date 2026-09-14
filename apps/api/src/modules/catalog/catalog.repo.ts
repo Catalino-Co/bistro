@@ -15,7 +15,7 @@ export async function listTaxRates(): Promise<TaxRateRow[]> {
     .from(schema.taxRates);
 }
 
-export interface CategoryRow {
+export interface FamilyRow {
   id: number;
   name: string;
   status: 'active' | 'inactive';
@@ -23,10 +23,10 @@ export interface CategoryRow {
 }
 
 const CATEGORY_COLUMNS = {
-  id: schema.categories.id,
-  name: schema.categories.name,
-  status: schema.categories.status,
-  archivedAt: schema.categories.archivedAt,
+  id: schema.families.id,
+  name: schema.families.name,
+  status: schema.families.status,
+  archivedAt: schema.families.archivedAt,
 };
 
 /**
@@ -37,7 +37,7 @@ const CATEGORY_COLUMNS = {
  */
 // `all` no es un estado mas: es la ausencia de filtro. Lo usan los
 // selectores de padre de las pantallas del arbol -- para elegir bajo que
-// familia va una subfamilia hace falta ver todas las familias, tambien las
+// subfamilia va una categoría hace falta ver todas las subfamilias, tambien las
 // pausadas y las archivadas, o esas ramas quedan inalcanzables.
 export type NodeStatusFilter = 'active' | 'inactive' | 'archived' | 'all';
 
@@ -55,54 +55,15 @@ function statusCondition(
   return and(eq(statusColumn, filter), isNull(archivedColumn));
 }
 
-export async function listCategories(filter: NodeStatusFilter = 'active'): Promise<CategoryRow[]> {
+export async function listFamilies(filter: NodeStatusFilter = 'active'): Promise<FamilyRow[]> {
   return db
     .select(CATEGORY_COLUMNS)
-    .from(schema.categories)
-    .where(statusCondition(schema.categories.status, schema.categories.archivedAt, filter));
-}
-
-export async function createCategory(name: string): Promise<CategoryRow> {
-  const [row] = await db.insert(schema.categories).values({ name }).returning(CATEGORY_COLUMNS);
-  if (!row) throw new Error('Failed to create category');
-  return row;
-}
-
-export interface FamilyRow {
-  id: number;
-  categoryId: number;
-  name: string;
-  status: 'active' | 'inactive';
-  archivedAt: Date | null;
-}
-
-const FAMILY_COLUMNS = {
-  id: schema.families.id,
-  categoryId: schema.families.categoryId,
-  name: schema.families.name,
-  status: schema.families.status,
-  archivedAt: schema.families.archivedAt,
-};
-
-export async function listFamilies(
-  categoryId?: number,
-  filter: NodeStatusFilter = 'active',
-): Promise<FamilyRow[]> {
-  const conditions = [statusCondition(schema.families.status, schema.families.archivedAt, filter)];
-  if (categoryId !== undefined) {
-    conditions.push(eq(schema.families.categoryId, categoryId));
-  }
-  return db
-    .select(FAMILY_COLUMNS)
     .from(schema.families)
-    .where(and(...conditions));
+    .where(statusCondition(schema.families.status, schema.families.archivedAt, filter));
 }
 
-export async function createFamily(categoryId: number, name: string): Promise<FamilyRow> {
-  const [row] = await db
-    .insert(schema.families)
-    .values({ categoryId, name })
-    .returning(FAMILY_COLUMNS);
+export async function createFamily(name: string): Promise<FamilyRow> {
+  const [row] = await db.insert(schema.families).values({ name }).returning(CATEGORY_COLUMNS);
   if (!row) throw new Error('Failed to create family');
   return row;
 }
@@ -115,7 +76,7 @@ export interface SubfamilyRow {
   archivedAt: Date | null;
 }
 
-const SUBFAMILY_COLUMNS = {
+const FAMILY_COLUMNS = {
   id: schema.subfamilies.id,
   familyId: schema.subfamilies.familyId,
   name: schema.subfamilies.name,
@@ -127,14 +88,12 @@ export async function listSubfamilies(
   familyId?: number,
   filter: NodeStatusFilter = 'active',
 ): Promise<SubfamilyRow[]> {
-  const conditions = [
-    statusCondition(schema.subfamilies.status, schema.subfamilies.archivedAt, filter),
-  ];
+  const conditions = [statusCondition(schema.subfamilies.status, schema.subfamilies.archivedAt, filter)];
   if (familyId !== undefined) {
     conditions.push(eq(schema.subfamilies.familyId, familyId));
   }
   return db
-    .select(SUBFAMILY_COLUMNS)
+    .select(FAMILY_COLUMNS)
     .from(schema.subfamilies)
     .where(and(...conditions));
 }
@@ -143,12 +102,53 @@ export async function createSubfamily(familyId: number, name: string): Promise<S
   const [row] = await db
     .insert(schema.subfamilies)
     .values({ familyId, name })
-    .returning(SUBFAMILY_COLUMNS);
+    .returning(FAMILY_COLUMNS);
   if (!row) throw new Error('Failed to create subfamily');
   return row;
 }
 
-export type TreeLevel = 'category' | 'family' | 'subfamily';
+export interface CategoryRow {
+  id: number;
+  subfamilyId: number;
+  name: string;
+  status: 'active' | 'inactive';
+  archivedAt: Date | null;
+}
+
+const SUBFAMILY_COLUMNS = {
+  id: schema.categories.id,
+  subfamilyId: schema.categories.subfamilyId,
+  name: schema.categories.name,
+  status: schema.categories.status,
+  archivedAt: schema.categories.archivedAt,
+};
+
+export async function listCategories(
+  subfamilyId?: number,
+  filter: NodeStatusFilter = 'active',
+): Promise<CategoryRow[]> {
+  const conditions = [
+    statusCondition(schema.categories.status, schema.categories.archivedAt, filter),
+  ];
+  if (subfamilyId !== undefined) {
+    conditions.push(eq(schema.categories.subfamilyId, subfamilyId));
+  }
+  return db
+    .select(SUBFAMILY_COLUMNS)
+    .from(schema.categories)
+    .where(and(...conditions));
+}
+
+export async function createCategory(subfamilyId: number, name: string): Promise<CategoryRow> {
+  const [row] = await db
+    .insert(schema.categories)
+    .values({ subfamilyId, name })
+    .returning(SUBFAMILY_COLUMNS);
+  if (!row) throw new Error('Failed to create category');
+  return row;
+}
+
+export type TreeLevel = 'family' | 'subfamily' | 'category';
 
 export type TreeNodeRow = {
   id: number;
@@ -175,15 +175,15 @@ export type RestoreNodeResult =
 // vez y se despachan por nivel. Escribirlas tres veces era la via rapida a
 // que una de ellas olvidara la invariante de archivar.
 const TREE_TABLES = {
-  category: schema.categories,
   family: schema.families,
   subfamily: schema.subfamilies,
+  category: schema.categories,
 } as const;
 
 const TREE_ENTITY: Record<TreeLevel, string> = {
-  category: 'category',
   family: 'family',
   subfamily: 'subfamily',
+  category: 'category',
 };
 
 function treeColumns(level: TreeLevel) {
@@ -306,7 +306,7 @@ export async function restoreTreeNode(
 
 export interface ItemRow {
   id: number;
-  subfamilyId: number;
+  categoryId: number;
   name: string;
   price: string;
   taxRateId: number;
@@ -317,11 +317,12 @@ export interface ItemRow {
 
 const ITEM_COLUMNS = {
   id: schema.items.id,
-  subfamilyId: schema.items.subfamilyId,
+  categoryId: schema.items.categoryId,
   name: schema.items.name,
   price: schema.items.price,
   taxRateId: schema.items.taxRateId,
   stationId: schema.items.stationId,
+  usesModifiers: schema.items.usesModifiers,
   status: schema.items.status,
   archivedAt: schema.items.archivedAt,
 };
@@ -334,12 +335,12 @@ const sellableItem = and(eq(schema.items.status, 'active'), isNull(schema.items.
 // join hasta categorias (el picker del POS y el guard de addOrderLine).
 const sellableWithAncestry = and(
   sellableItem,
+  eq(schema.categories.status, 'active'),
+  isNull(schema.categories.archivedAt),
   eq(schema.subfamilies.status, 'active'),
   isNull(schema.subfamilies.archivedAt),
   eq(schema.families.status, 'active'),
   isNull(schema.families.archivedAt),
-  eq(schema.categories.status, 'active'),
-  isNull(schema.categories.archivedAt),
 );
 
 /**
@@ -351,22 +352,14 @@ export async function isItemSellable(itemId: number): Promise<boolean> {
   const [row] = await db
     .select({ id: schema.items.id })
     .from(schema.items)
-    .innerJoin(schema.subfamilies, eq(schema.subfamilies.id, schema.items.subfamilyId))
+    .innerJoin(schema.categories, eq(schema.categories.id, schema.items.categoryId))
+    .innerJoin(schema.subfamilies, eq(schema.subfamilies.id, schema.categories.subfamilyId))
     .innerJoin(schema.families, eq(schema.families.id, schema.subfamilies.familyId))
-    .innerJoin(schema.categories, eq(schema.categories.id, schema.families.categoryId))
     .where(and(eq(schema.items.id, itemId), sellableWithAncestry));
   return row !== undefined;
 }
 
 /** Si el padre esta archivado, no se le pueden colgar hijos nuevos. */
-export async function isCategoryArchived(id: number): Promise<boolean> {
-  const [row] = await db
-    .select({ archivedAt: schema.categories.archivedAt })
-    .from(schema.categories)
-    .where(eq(schema.categories.id, id));
-  return row?.archivedAt != null;
-}
-
 export async function isFamilyArchived(id: number): Promise<boolean> {
   const [row] = await db
     .select({ archivedAt: schema.families.archivedAt })
@@ -383,6 +376,14 @@ export async function isSubfamilyArchived(id: number): Promise<boolean> {
   return row?.archivedAt != null;
 }
 
+export async function isCategoryArchived(id: number): Promise<boolean> {
+  const [row] = await db
+    .select({ archivedAt: schema.categories.archivedAt })
+    .from(schema.categories)
+    .where(eq(schema.categories.id, id));
+  return row?.archivedAt != null;
+}
+
 export type ItemStatusFilter = 'active' | 'inactive' | 'archived';
 
 function itemStatusCondition(filter: ItemStatusFilter) {
@@ -393,12 +394,12 @@ function itemStatusCondition(filter: ItemStatusFilter) {
 }
 
 export async function listItems(
-  subfamilyId?: number,
+  categoryId?: number,
   filter: ItemStatusFilter = 'active',
 ): Promise<ItemRow[]> {
   const conditions = [itemStatusCondition(filter)];
-  if (subfamilyId !== undefined) {
-    conditions.push(eq(schema.items.subfamilyId, subfamilyId));
+  if (categoryId !== undefined) {
+    conditions.push(eq(schema.items.categoryId, categoryId));
   }
   return db
     .select(ITEM_COLUMNS)
@@ -406,26 +407,26 @@ export async function listItems(
     .where(and(...conditions));
 }
 
-export interface ItemWithCategoryRow extends ItemRow {
-  categoryId: number;
-  categoryName: string;
+export interface ItemWithFamilyRow extends ItemRow {
+  familyId: number;
+  familyName: string;
 }
 
-// Joins up to the category so the POS can group its item picker without
-// an N+1 fetch per category/family/subfamily -- additive alongside
+// Joins up to the family so the POS can group its item picker without
+// an N+1 fetch per family/subfamily/category -- additive alongside
 // listItems (which stays as-is for admin/catalog's drill-down browsing).
-export async function listItemsWithCategory(): Promise<ItemWithCategoryRow[]> {
+export async function listItemsWithFamily(): Promise<ItemWithFamilyRow[]> {
   return (
     db
       .select({
         ...ITEM_COLUMNS,
-        categoryId: schema.categories.id,
-        categoryName: schema.categories.name,
+        familyId: schema.families.id,
+        familyName: schema.families.name,
       })
       .from(schema.items)
-      .innerJoin(schema.subfamilies, eq(schema.subfamilies.id, schema.items.subfamilyId))
+      .innerJoin(schema.categories, eq(schema.categories.id, schema.items.categoryId))
+      .innerJoin(schema.subfamilies, eq(schema.subfamilies.id, schema.categories.subfamilyId))
       .innerJoin(schema.families, eq(schema.families.id, schema.subfamilies.familyId))
-      .innerJoin(schema.categories, eq(schema.categories.id, schema.families.categoryId))
       // El picker solo ofrece lo vendible, y vendible es el item Y toda su
       // ascendencia: archivar una categoria saca del POS todo lo que cuelga
       // de ella sin escribir una sola fila en sus hijos.
@@ -438,7 +439,7 @@ export async function listItemsWithCategory(): Promise<ItemWithCategoryRow[]> {
 }
 
 export async function createItem(
-  subfamilyId: number,
+  categoryId: number,
   name: string,
   price: string,
   taxRateId: number,
@@ -446,7 +447,7 @@ export async function createItem(
 ): Promise<ItemRow> {
   const [row] = await db
     .insert(schema.items)
-    .values({ subfamilyId, name, price, taxRateId, stationId: stationId ?? null })
+    .values({ categoryId, name, price, taxRateId, stationId: stationId ?? null })
     .returning(ITEM_COLUMNS);
   if (!row) throw new Error('Failed to create item');
   return row;
@@ -463,6 +464,7 @@ export interface ItemPatch {
   price?: string | undefined;
   taxRateId?: number | undefined;
   status?: ('active' | 'inactive') | undefined;
+  usesModifiers?: boolean | undefined;
 }
 
 /**
@@ -507,6 +509,7 @@ export async function updateItem(
     if (patch.price !== undefined) values.price = patch.price;
     if (patch.taxRateId !== undefined) values.taxRateId = patch.taxRateId;
     if (patch.status !== undefined) values.status = patch.status;
+    if (patch.usesModifiers !== undefined) values.usesModifiers = patch.usesModifiers;
     if (Object.keys(values).length === 0) {
       return { outcome: 'noop' as const, item: before };
     }

@@ -1,12 +1,12 @@
 <script module lang="ts">
-	export type TreeLevel = 'category' | 'family' | 'subfamily';
+	export type TreeLevel = 'family' | 'subfamily' | 'category';
 
 	export interface TreeNode {
 		id: number;
 		name: string;
 		status: 'active' | 'inactive';
 		archivedAt: string | null;
-		/** Presente en familias (su categoría) y subfamilias (su familia). */
+		/** Presente en subfamilias (su familia) y categorías (su subfamilia). */
 		parentId?: number;
 	}
 </script>
@@ -24,7 +24,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { apiErrorMessage } from '$lib/errors.js';
-	import { itemState } from '$lib/status.js';
+	import { treeNodeState } from '$lib/status.js';
 	import { defaultParentId, parentOptionLabel } from './parents.js';
 	import { toasts } from '$lib/toasts.svelte.js';
 
@@ -58,7 +58,7 @@
 		singular: string;
 		description: string;
 		/** Segmento de la URL en la API y la clave del array en su respuesta. */
-		path: 'categories' | 'families' | 'subfamilies';
+		path: 'families' | 'subfamilies' | 'categories';
 		placeholder: string;
 		/** Nivel del que cuelga, si cuelga de alguno. */
 		parent?: {
@@ -67,38 +67,38 @@
 			/** Plural, para cuando no hay ninguno donde colgar esto. */
 			plural: string;
 			singular: string;
-			field: 'categoryId' | 'familyId';
+			field: 'familyId' | 'subfamilyId';
 		};
 	}
 
 	const COPY: Record<TreeLevel, LevelCopy> = {
-		category: {
-			plural: 'Categorías',
-			singular: 'categoría',
-			description: 'El primer nivel del menú. De cada categoría cuelgan sus familias.',
-			path: 'categories',
-			placeholder: 'Comidas, Bebidas…',
-		},
 		family: {
 			plural: 'Familias',
 			singular: 'familia',
-			description: 'El segundo nivel. Cada familia vive dentro de una categoría.',
+			description: 'El primer nivel del menú. De cada familia cuelgan sus subfamilias.',
 			path: 'families',
-			placeholder: 'Carnes, Cervezas…',
-			parent: {
-				label: 'Categoría',
-				plural: 'categorías',
-				singular: 'una categoría',
-				field: 'categoryId',
-			},
+			placeholder: 'Comidas, Bebidas…',
 		},
 		subfamily: {
 			plural: 'Subfamilias',
 			singular: 'subfamilia',
-			description: 'El tercer nivel. Los ítems del menú cuelgan de una subfamilia.',
+			description: 'El segundo nivel. Cada subfamilia vive dentro de una familia.',
 			path: 'subfamilies',
+			placeholder: 'Carnes, Cervezas…',
+			parent: {
+				label: 'Familia',
+				plural: 'familias',
+				singular: 'una familia',
+				field: 'familyId',
+			},
+		},
+		category: {
+			plural: 'Categorías',
+			singular: 'categoría',
+			description: 'El tercer nivel. Los ítems del menú cuelgan de una categoría.',
+			path: 'categories',
 			placeholder: 'Res, Nacionales…',
-			parent: { label: 'Familia', plural: 'familias', singular: 'una familia', field: 'familyId' },
+			parent: { label: 'Subfamilia', plural: 'subfamilias', singular: 'una subfamilia', field: 'subfamilyId' },
 		},
 	};
 
@@ -108,14 +108,14 @@
 	let loading = $state(true);
 	let statusFilter = $state<StatusFilter>('active');
 
-	// La cadena de padres: una familia necesita su categoría, y una subfamilia
-	// necesita elegir familia, que a su vez se elige dentro de una categoría.
-	let categories = $state<TreeNode[]>([]);
+	// La cadena de padres: una subfamilia necesita su familia, y una categoría
+	// necesita elegir subfamilia, que a su vez se elige dentro de una familia.
 	let families = $state<TreeNode[]>([]);
-	let selectedCategoryId = $state<number | null>(null);
+	let subfamilies = $state<TreeNode[]>([]);
 	let selectedFamilyId = $state<number | null>(null);
+	let selectedSubfamilyId = $state<number | null>(null);
 
-	const parentId = $derived(level === 'family' ? selectedCategoryId : selectedFamilyId);
+	const parentId = $derived(level === 'subfamily' ? selectedFamilyId : selectedSubfamilyId);
 
 	let formOpen = $state(false);
 	let formMode = $state<'create' | 'edit'>('create');
@@ -127,35 +127,35 @@
 	let toArchive = $state<TreeNode | null>(null);
 
 	/**
-	 * Los selectores de padre piden `status=all` a propósito. Una familia
-	 * puede vivir bajo una categoría pausada, y si el selector solo ofreciera
+	 * Los selectores de padre piden `status=all` a propósito. Una subfamilia
+	 * puede vivir bajo una familia pausada, y si el selector solo ofreciera
 	 * las activas esa rama entera quedaría fuera del alcance de la pantalla
 	 * -- justo lo contrario de archivar en vez de borrar.
 	 */
 	async function loadParents() {
-		if (level === 'category') return;
+		if (level === 'family') return;
 
-		const categoriesResponse = await apiFetch('/catalog/categories?status=all');
-		if (categoriesResponse.ok) {
-			categories = ((await categoriesResponse.json()) as { categories: TreeNode[] }).categories;
-			if (selectedCategoryId === null) selectedCategoryId = defaultParentId(categories);
+		const familiesResponse = await apiFetch('/catalog/families?status=all');
+		if (familiesResponse.ok) {
+			families = ((await familiesResponse.json()) as { families: TreeNode[] }).families;
+			if (selectedFamilyId === null) selectedFamilyId = defaultParentId(families);
 		}
-		if (level === 'subfamily') await loadFamilies();
+		if (level === 'category') await loadSubfamilies();
 	}
 
-	async function loadFamilies() {
-		if (selectedCategoryId === null) {
-			families = [];
-			selectedFamilyId = null;
+	async function loadSubfamilies() {
+		if (selectedFamilyId === null) {
+			subfamilies = [];
+			selectedSubfamilyId = null;
 			return;
 		}
 		const response = await apiFetch(
-			`/catalog/families?categoryId=${selectedCategoryId}&status=all`,
+			`/catalog/subfamilies?familyId=${selectedFamilyId}&status=all`,
 		);
 		if (response.ok) {
-			families = ((await response.json()) as { families: TreeNode[] }).families;
-			if (!families.some((family) => family.id === selectedFamilyId)) {
-				selectedFamilyId = defaultParentId(families);
+			subfamilies = ((await response.json()) as { subfamilies: TreeNode[] }).subfamilies;
+			if (!subfamilies.some((subfamily) => subfamily.id === selectedSubfamilyId)) {
+				selectedSubfamilyId = defaultParentId(subfamilies);
 			}
 		}
 	}
@@ -174,8 +174,8 @@
 		}
 	}
 
-	async function changeCategory() {
-		if (level === 'subfamily') await loadFamilies();
+	async function changeFamily() {
+		if (level === 'category') await loadSubfamilies();
 		await load();
 	}
 
@@ -269,24 +269,24 @@
 </PageHeader>
 
 <div class="filters">
-	{#if level !== 'category'}
-		<Field label="Categoría">
+	{#if level !== 'family'}
+		<Field label="Familia">
 			{#snippet control({ id })}
-				<select {id} bind:value={selectedCategoryId} onchange={changeCategory}>
-					{#each categories as category (category.id)}
-						<option value={category.id}>{parentOptionLabel(category)}</option>
+				<select {id} bind:value={selectedFamilyId} onchange={changeFamily}>
+					{#each families as family (family.id)}
+						<option value={family.id}>{parentOptionLabel(family)}</option>
 					{/each}
 				</select>
 			{/snippet}
 		</Field>
 	{/if}
 
-	{#if level === 'subfamily'}
-		<Field label="Familia">
+	{#if level === 'category'}
+		<Field label="Subfamilia">
 			{#snippet control({ id })}
-				<select {id} bind:value={selectedFamilyId} onchange={() => load()}>
-					{#each families as family (family.id)}
-						<option value={family.id}>{parentOptionLabel(family)}</option>
+				<select {id} bind:value={selectedSubfamilyId} onchange={() => load()}>
+					{#each subfamilies as subfamily (subfamily.id)}
+						<option value={subfamily.id}>{parentOptionLabel(subfamily)}</option>
 					{/each}
 				</select>
 			{/snippet}
@@ -335,7 +335,7 @@
 {:else}
 	<DataList>
 		{#each nodes as node (node.id)}
-			{@const state = itemState(node)}
+			{@const state = treeNodeState(node)}
 			<DataListRow title={node.name}>
 				{#if node.archivedAt || node.status !== 'active'}
 					<Badge tone={state.tone}>{state.label}</Badge>

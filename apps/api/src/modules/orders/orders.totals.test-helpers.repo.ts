@@ -9,9 +9,9 @@ import { eq, inArray } from 'drizzle-orm';
 // and modifiers. Catalog fixtures aren't branch-scoped, so cleanup here is
 // by exact id instead, the same way deleteBranchFixture is id-scoped.
 export interface CatalogItemFixture {
-  categoryId: number;
   familyId: number;
   subfamilyId: number;
+  categoryId: number;
   itemId: number;
 }
 
@@ -19,22 +19,22 @@ export async function createCatalogItem(
   suffix: string,
   taxRateId: number,
 ): Promise<CatalogItemFixture> {
-  const [category] = await db
-    .insert(schema.categories)
-    .values({ name: `__order_totals_test_cat_${suffix}__` })
-    .returning();
   const [family] = await db
     .insert(schema.families)
-    .values({ categoryId: category!.id, name: `__order_totals_test_fam_${suffix}__` })
+    .values({ name: `__order_totals_test_cat_${suffix}__` })
     .returning();
   const [subfamily] = await db
     .insert(schema.subfamilies)
-    .values({ familyId: family!.id, name: `__order_totals_test_sub_${suffix}__` })
+    .values({ familyId: family!.id, name: `__order_totals_test_fam_${suffix}__` })
+    .returning();
+  const [category] = await db
+    .insert(schema.categories)
+    .values({ subfamilyId: subfamily!.id, name: `__order_totals_test_sub_${suffix}__` })
     .returning();
   const [item] = await db
     .insert(schema.items)
     .values({
-      subfamilyId: subfamily!.id,
+      categoryId: category!.id,
       name: `__order_totals_test_item_${suffix}__`,
       price: '10.0000',
       taxRateId,
@@ -42,9 +42,9 @@ export async function createCatalogItem(
     .returning();
 
   return {
-    categoryId: category!.id,
     familyId: family!.id,
     subfamilyId: subfamily!.id,
+    categoryId: category!.id,
     itemId: item!.id,
   };
 }
@@ -89,6 +89,12 @@ export async function deleteCatalogFixtures(
       items.map((i) => i.itemId),
     ),
   );
+  await db.delete(schema.categories).where(
+    inArray(
+      schema.categories.id,
+      items.map((i) => i.categoryId),
+    ),
+  );
   await db.delete(schema.subfamilies).where(
     inArray(
       schema.subfamilies.id,
@@ -99,12 +105,6 @@ export async function deleteCatalogFixtures(
     inArray(
       schema.families.id,
       items.map((i) => i.familyId),
-    ),
-  );
-  await db.delete(schema.categories).where(
-    inArray(
-      schema.categories.id,
-      items.map((i) => i.categoryId),
     ),
   );
 }

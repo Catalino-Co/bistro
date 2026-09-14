@@ -51,6 +51,17 @@ export function itemState(item: { status: string; archivedAt: string | null }): 
 }
 
 /**
+ * Lo mismo para un nivel del árbol, que en los tres casos es femenino:
+ * familia, subfamilia y categoría. Compartir `itemState` dejaba «Inactivo»
+ * bajo un filtro que dice «Inactivas».
+ */
+export function treeNodeState(node: { status: string; archivedAt: string | null }): StatusLabel {
+  if (node.archivedAt) return { label: 'Archivada', tone: 'neutral' };
+  if (node.status === 'active') return { label: 'Activa', tone: 'success' };
+  return { label: 'Inactiva', tone: 'warning' };
+}
+
+/**
  * El estado de una línea no es una columna: sale de la combinación de
  * `voidedAt`, `sentToKitchenAt` y `preparedAt`. El orden de las ramas
  * importa -- una línea anulada lo está aunque ya se hubiera enviado.

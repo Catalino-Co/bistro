@@ -148,6 +148,20 @@
       "when": 1789349770132,
       "tag": "0020_soft_bill_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789395360021,
+      "tag": "0021_sudden_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789395979625,
+      "tag": "0022_rotate_catalog_audit_keys",
+      "breakpoints": true
     }
   ]
 }

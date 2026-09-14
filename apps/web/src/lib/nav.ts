@@ -116,28 +116,28 @@ export const SETTINGS_ITEMS: CardNavItem[] = [
   },
 ];
 
-// Las secciones del Catálogo, en el orden del árbol: una categoría contiene
-// familias, una familia contiene subfamilias, y los ítems cuelgan de la
-// subfamilia. Los modificadores van al final porque son transversales --
+// Las secciones del Catálogo, en el orden del árbol: una familia contiene
+// subfamilias, una subfamilia contiene categorías, y los ítems cuelgan de la
+// categoría. Los modificadores van al final porque son transversales --
 // se asocian a un ítem, no cuelgan de él.
 //
 // Se dibujan como tarjetas, no como pestañas: ver `docs/ui-standards.md`.
 export const CATALOG_ITEMS: CardNavItem[] = [
   {
-    href: '/menu/categories',
-    label: 'Categorías',
+    href: '/menu/families',
+    label: 'Familias',
     description: 'El primer nivel del menú: Comidas, Bebidas…',
     icon: 'folder',
   },
   {
-    href: '/menu/families',
-    label: 'Familias',
-    description: 'El segundo nivel, dentro de cada categoría',
+    href: '/menu/subfamilies',
+    label: 'Subfamilias',
+    description: 'El segundo nivel, dentro de cada familia',
     icon: 'layers',
   },
   {
-    href: '/menu/subfamilies',
-    label: 'Subfamilias',
+    href: '/menu/categories',
+    label: 'Categorías',
     description: 'El tercer nivel, del que cuelgan los ítems',
     icon: 'branch',
   },

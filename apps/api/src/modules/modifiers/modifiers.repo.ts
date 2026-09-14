@@ -1,5 +1,5 @@
 import { db, schema } from '@bistro/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 export interface ModifierGroupRow {
   id: number;
@@ -78,4 +78,28 @@ export async function associateModifierGroupWithItem(
     .insert(schema.itemModifierGroups)
     .values({ itemId, modifierGroupId })
     .onConflictDoNothing();
+}
+
+/**
+ * Quitarle un grupo a un item. Hasta ahora solo se podia asociar, asi que un
+ * grupo puesto por error se quedaba para siempre -- y "no todos los items
+ * llevan los mismos modificadores" exige poder deshacerlo.
+ *
+ * Esto SI es un DELETE de verdad, y es la excepcion que confirma la regla de
+ * no borrar: `item_modifier_groups` no es historial, es configuracion. Lo que
+ * de verdad se pidio vive en `order_line_modifiers`, que copia nombre y
+ * precio al momento de la venta y no depende de esta fila.
+ */
+export async function disassociateModifierGroupFromItem(
+  itemId: number,
+  modifierGroupId: number,
+): Promise<void> {
+  await db
+    .delete(schema.itemModifierGroups)
+    .where(
+      and(
+        eq(schema.itemModifierGroups.itemId, itemId),
+        eq(schema.itemModifierGroups.modifierGroupId, modifierGroupId),
+      ),
+    );
 }

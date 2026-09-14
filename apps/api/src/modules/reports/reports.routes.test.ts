@@ -31,7 +31,7 @@ interface DailySummary {
   openNow: { orderCount: number; total: string };
   tipTotal: string;
   payments: { paymentMethodName: string; count: number; amount: string; tipAmount: string }[];
-  byCategory: { name: string; quantity: number; amount: string }[];
+  byFamily: { name: string; quantity: number; amount: string }[];
   byStation: { name: string; quantity: number; amount: string }[];
   byHour: { hour: number; orderCount: number; amount: string }[];
 }
@@ -134,7 +134,7 @@ describe('daily report', () => {
       total: '0.0000',
       averageTicket: '0.0000',
     });
-    expect(summary.byCategory).toEqual([]);
+    expect(summary.byFamily).toEqual([]);
     expect(summary.payments).toEqual([]);
   });
 
@@ -163,10 +163,10 @@ describe('daily report', () => {
     });
   });
 
-  it('breaks the day down by category and by station, on line subtotals without tax', async () => {
+  it('breaks the day down by family and by station, on line subtotals without tax', async () => {
     const summary = await daily();
-    expect(summary.byCategory).toHaveLength(1);
-    expect(summary.byCategory[0]).toMatchObject({
+    expect(summary.byFamily).toHaveLength(1);
+    expect(summary.byFamily[0]).toMatchObject({
       name: '__order_totals_test_cat_reports__',
       quantity: 6,
       amount: '60.0000',

@@ -22,6 +22,9 @@ Los tests corren contra la base de desarrollo. Al limpiar datos de prueba,
 
 ## Reglas del dominio
 
+- **El árbol del menú es `familia → subfamilia → categoría → ítem`.** Ese
+  orden es el del negocio, no el del esquema heredado: hasta la migración
+  0021 los tres niveles se llamaban al revés. Las filas nunca se movieron.
 - **Archivar, nunca borrar** lo que tenga historial de uso. Ver
   `docs/ui-standards.md`.
 - Los totales de una orden cerrada salen de sus columnas congeladas, no de

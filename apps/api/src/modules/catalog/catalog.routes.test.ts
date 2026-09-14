@@ -45,61 +45,61 @@ describe('catalog routes', () => {
     await closeTestDbPool();
   });
 
-  it('creates the full category -> family -> subfamily -> item chain', async () => {
-    const category = await app.inject({
-      method: 'POST',
-      url: '/catalog/categories',
-      headers: { cookie, 'x-csrf-token': csrfToken },
-      payload: { name: '__catalog_test_category__' },
-    });
-    expect(category.statusCode).toBe(201);
-    const categoryId = (category.json() as { category: { id: number } }).category.id;
-
+  it('creates the full family -> subfamily -> category -> item chain', async () => {
     const family = await app.inject({
       method: 'POST',
       url: '/catalog/families',
       headers: { cookie, 'x-csrf-token': csrfToken },
-      payload: { categoryId, name: '__catalog_test_family__' },
+      payload: { name: '__catalog_test_category__' },
     });
     expect(family.statusCode).toBe(201);
     const familyId = (family.json() as { family: { id: number } }).family.id;
 
-    // The literal point of this task: creating a subfamily is exactly as
-    // available as every other level, with no code change involved.
     const subfamily = await app.inject({
       method: 'POST',
       url: '/catalog/subfamilies',
       headers: { cookie, 'x-csrf-token': csrfToken },
-      payload: { familyId, name: '__catalog_test_subfamily__' },
+      payload: { familyId, name: '__catalog_test_family__' },
     });
     expect(subfamily.statusCode).toBe(201);
     const subfamilyId = (subfamily.json() as { subfamily: { id: number } }).subfamily.id;
 
-    const subfamiliesForFamily = await app.inject({
+    // The literal point of this task: creating a category is exactly as
+    // available as every other level, with no code change involved.
+    const category = await app.inject({
+      method: 'POST',
+      url: '/catalog/categories',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { subfamilyId, name: '__catalog_test_subfamily__' },
+    });
+    expect(category.statusCode).toBe(201);
+    const categoryId = (category.json() as { category: { id: number } }).category.id;
+
+    const categoriesForSubfamily = await app.inject({
       method: 'GET',
-      url: `/catalog/subfamilies?familyId=${familyId}`,
+      url: `/catalog/categories?subfamilyId=${subfamilyId}`,
       headers: { cookie },
     });
-    const subfamilyNames = (
-      subfamiliesForFamily.json() as { subfamilies: { name: string }[] }
-    ).subfamilies.map((s) => s.name);
-    expect(subfamilyNames).toEqual(['__catalog_test_subfamily__']);
+    const categoryNames = (
+      categoriesForSubfamily.json() as { categories: { name: string }[] }
+    ).categories.map((s) => s.name);
+    expect(categoryNames).toEqual(['__catalog_test_subfamily__']);
 
     const taxRateId = await findTaxRateIdByName('ITBIS 18%');
     const item = await app.inject({
       method: 'POST',
       url: '/catalog/items',
       headers: { cookie, 'x-csrf-token': csrfToken },
-      payload: { subfamilyId, name: '__catalog_test_item__', price: '250.00', taxRateId },
+      payload: { categoryId, name: '__catalog_test_item__', price: '250.00', taxRateId },
     });
     expect(item.statusCode).toBe(201);
 
-    const itemsForSubfamily = await app.inject({
+    const itemsForCategory = await app.inject({
       method: 'GET',
-      url: `/catalog/items?subfamilyId=${subfamilyId}`,
+      url: `/catalog/items?categoryId=${categoryId}`,
       headers: { cookie },
     });
-    const itemNames = (itemsForSubfamily.json() as { items: { name: string }[] }).items.map(
+    const itemNames = (itemsForCategory.json() as { items: { name: string }[] }).items.map(
       (i) => i.name,
     );
     expect(itemNames).toEqual(['__catalog_test_item__']);
@@ -111,9 +111,9 @@ describe('catalog routes', () => {
     });
     expect(fullItems.statusCode).toBe(200);
     const fullItem = (
-      fullItems.json() as { items: { name: string; categoryId: number; categoryName: string }[] }
+      fullItems.json() as { items: { name: string; familyId: number; familyName: string }[] }
     ).items.find((i) => i.name === '__catalog_test_item__');
-    expect(fullItem).toMatchObject({ categoryId, categoryName: '__catalog_test_category__' });
+    expect(fullItem).toMatchObject({ familyId, familyName: '__catalog_test_category__' });
   });
 
   it('creates a kitchen station and routes an item to it', async () => {
@@ -136,27 +136,27 @@ describe('catalog routes', () => {
     ).kitchenStations.map((s) => s.name);
     expect(stationNames).toContain('__catalog_test_station__');
 
-    const category = await app.inject({
-      method: 'POST',
-      url: '/catalog/categories',
-      headers: { cookie, 'x-csrf-token': csrfToken },
-      payload: { name: '__catalog_test_station_cat__' },
-    });
-    const categoryId = (category.json() as { category: { id: number } }).category.id;
     const family = await app.inject({
       method: 'POST',
       url: '/catalog/families',
       headers: { cookie, 'x-csrf-token': csrfToken },
-      payload: { categoryId, name: '__catalog_test_station_fam__' },
+      payload: { name: '__catalog_test_station_cat__' },
     });
     const familyId = (family.json() as { family: { id: number } }).family.id;
     const subfamily = await app.inject({
       method: 'POST',
       url: '/catalog/subfamilies',
       headers: { cookie, 'x-csrf-token': csrfToken },
-      payload: { familyId, name: '__catalog_test_station_sub__' },
+      payload: { familyId, name: '__catalog_test_station_fam__' },
     });
     const subfamilyId = (subfamily.json() as { subfamily: { id: number } }).subfamily.id;
+    const category = await app.inject({
+      method: 'POST',
+      url: '/catalog/categories',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { subfamilyId, name: '__catalog_test_station_sub__' },
+    });
+    const categoryId = (category.json() as { category: { id: number } }).category.id;
 
     const taxRateId = await findTaxRateIdByName('ITBIS 18%');
     const itemWithStation = await app.inject({
@@ -164,7 +164,7 @@ describe('catalog routes', () => {
       url: '/catalog/items',
       headers: { cookie, 'x-csrf-token': csrfToken },
       payload: {
-        subfamilyId,
+        categoryId,
         name: '__catalog_test_station_item__',
         price: '50.00',
         taxRateId,
@@ -183,7 +183,7 @@ describe('catalog routes', () => {
       method: 'POST',
       url: '/catalog/items',
       headers: { cookie, 'x-csrf-token': csrfToken },
-      payload: { subfamilyId, name: '__catalog_test_station_item2__', price: '30.00', taxRateId },
+      payload: { categoryId, name: '__catalog_test_station_item2__', price: '30.00', taxRateId },
     });
     const noStationItemId = (
       noStationItem.json() as { item: { id: number; stationId: number | null } }
@@ -202,7 +202,7 @@ describe('catalog routes', () => {
 
     const itemsAfter = await app.inject({
       method: 'GET',
-      url: `/catalog/items?subfamilyId=${subfamilyId}`,
+      url: `/catalog/items?categoryId=${categoryId}`,
       headers: { cookie },
     });
     const stationsById = new Map(

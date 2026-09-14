@@ -2,7 +2,7 @@ import { db, schema } from '@bistro/db';
 import { inArray, like } from 'drizzle-orm';
 
 // The beforeAll in modifiers.routes.test.ts creates its own modifier
-// groups/modifiers AND its own category -> family -> subfamily -> item
+// groups/modifiers AND its own family -> subfamily -> category -> item
 // chain, all under this one "__modifiers_test_" prefix -- distinct from
 // catalog.routes.test.ts's "__catalog_test_" prefix, so the two suites'
 // cleanups never race over the same rows (they did, before this split:
@@ -28,7 +28,7 @@ export async function deleteModifiersTestData(): Promise<void> {
   }
 
   await db.delete(schema.items).where(like(schema.items.name, PATTERN));
+  await db.delete(schema.categories).where(like(schema.categories.name, PATTERN));
   await db.delete(schema.subfamilies).where(like(schema.subfamilies.name, PATTERN));
   await db.delete(schema.families).where(like(schema.families.name, PATTERN));
-  await db.delete(schema.categories).where(like(schema.categories.name, PATTERN));
 }

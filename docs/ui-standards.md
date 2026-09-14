@@ -43,7 +43,7 @@ El `+layout.svelte` del módulo pone la vuelta al índice en las rutas hijas
 quedarse encerrado.
 
 **Orden de las tarjetas:** el del dominio, no el alfabético. En Catálogo es
-el del árbol (categoría → familia → subfamilia → ítem), con lo transversal
+el del árbol (familia → subfamilia → categoría → ítem), con lo transversal
 al final.
 
 Ejemplos vivos: `/menu` y `/settings`.
@@ -76,3 +76,9 @@ entera.
 - **Las listas vacías usan `EmptyState`**, que distingue «todavía no hay
   nada» de «no cargó» y ofrece la acción de crear el primero.
 - **Un solo `Button variant="primary"` visible por bloque.**
+- **Los estilos de elemento de `tokens.css` le ganan a las clases de un
+  componente.** Svelte compila los estilos con `:where()`, que no suma
+  especificidad, así que `label { flex-direction: column }` gana sobre tu
+  `.toggle { display: flex }`. Si un componente estiliza un `button`, un
+  `label` o un `select`, declara TODAS las propiedades que le importan, no
+  solo las que quiere cambiar.

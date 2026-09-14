@@ -8,28 +8,28 @@ const PATTERN = '\\_\\_orders\\_test%';
 
 export interface ItemFixture {
   itemId: number;
-  categoryId: number;
   familyId: number;
   subfamilyId: number;
+  categoryId: number;
 }
 
 export async function createItemFixture(suffix: string, taxRateId: number): Promise<ItemFixture> {
-  const [category] = await db
-    .insert(schema.categories)
-    .values({ name: `__orders_test_cat_${suffix}__` })
-    .returning();
   const [family] = await db
     .insert(schema.families)
-    .values({ categoryId: category!.id, name: `__orders_test_fam_${suffix}__` })
+    .values({ name: `__orders_test_cat_${suffix}__` })
     .returning();
   const [subfamily] = await db
     .insert(schema.subfamilies)
-    .values({ familyId: family!.id, name: `__orders_test_sub_${suffix}__` })
+    .values({ familyId: family!.id, name: `__orders_test_fam_${suffix}__` })
+    .returning();
+  const [category] = await db
+    .insert(schema.categories)
+    .values({ subfamilyId: subfamily!.id, name: `__orders_test_sub_${suffix}__` })
     .returning();
   const [item] = await db
     .insert(schema.items)
     .values({
-      subfamilyId: subfamily!.id,
+      categoryId: category!.id,
       name: `__orders_test_item_${suffix}__`,
       price: '10.0000',
       taxRateId,
@@ -38,9 +38,9 @@ export async function createItemFixture(suffix: string, taxRateId: number): Prom
 
   return {
     itemId: item!.id,
-    categoryId: category!.id,
     familyId: family!.id,
     subfamilyId: subfamily!.id,
+    categoryId: category!.id,
   };
 }
 
@@ -118,7 +118,7 @@ export async function deleteOrdersTestData(): Promise<void> {
   }
 
   await db.delete(schema.items).where(like(schema.items.name, PATTERN));
+  await db.delete(schema.categories).where(like(schema.categories.name, PATTERN));
   await db.delete(schema.subfamilies).where(like(schema.subfamilies.name, PATTERN));
   await db.delete(schema.families).where(like(schema.families.name, PATTERN));
-  await db.delete(schema.categories).where(like(schema.categories.name, PATTERN));
 }

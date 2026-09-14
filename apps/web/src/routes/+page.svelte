@@ -28,7 +28,7 @@
 		openNow: { orderCount: number; total: string };
 		tipTotal: string;
 		payments: { paymentMethodId: number; paymentMethodName: string; count: number; amount: string }[];
-		byCategory: Slice[];
+		byFamily: Slice[];
 		byStation: Slice[];
 		byHour: { hour: number; orderCount: number; amount: string }[];
 	}
@@ -205,7 +205,7 @@
 	</section>
 
 	<div class="breakdowns">
-		{#each [{ title: 'Por categoría', slices: summary.byCategory }, { title: 'Por estación', slices: summary.byStation }] as block (block.title)}
+		{#each [{ title: 'Por familia', slices: summary.byFamily }, { title: 'Por estación', slices: summary.byStation }] as block (block.title)}
 			<section class="panel">
 				<header>
 					<h2>{block.title}</h2>

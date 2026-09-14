@@ -32,7 +32,7 @@ interface Node {
  * que el picker respeta la ascendencia, y que restaurar devuelve el estado
  * exacto que cada hijo tenía.
  */
-describe('archiving categories, families and subfamilies', () => {
+describe('archiving families, subfamilies and categories', () => {
   const app = buildApp();
   let branch: BranchFixture;
   let cookie: string;
@@ -110,9 +110,9 @@ describe('archiving categories, families and subfamilies', () => {
     // Cada nivel, de abajo a arriba: archivar y comprobar que el ítem -- que
     // sigue activo -- desaparece del picker de todas formas.
     const levels: { path: string; id: number }[] = [
+      { path: 'categories', id: fixture.categoryId },
       { path: 'subfamilies', id: fixture.subfamilyId },
       { path: 'families', id: fixture.familyId },
-      { path: 'categories', id: fixture.categoryId },
     ];
 
     for (const level of levels) {
@@ -135,20 +135,20 @@ describe('archiving categories, families and subfamilies', () => {
   });
 
   it('never writes to the children, so restoring gives back exactly what was there', async () => {
-    // Se pausa la subfamilia a mano, luego se archiva la categoría entera.
+    // Se pausa la categoría a mano, luego se archiva la familia entera.
     await app.inject({
       method: 'PATCH',
-      url: `/catalog/subfamilies/${fixture.subfamilyId}`,
+      url: `/catalog/categories/${fixture.categoryId}`,
       headers: { cookie, 'x-csrf-token': csrfToken },
       payload: { status: 'inactive' },
     });
-    expect((await archive('categories', fixture.categoryId)).statusCode).toBe(200);
+    expect((await archive('families', fixture.familyId)).statusCode).toBe(200);
 
-    // La subfamilia sigue como estaba: inactiva, NO archivada.
-    const [subfamily] = await list('subfamilies', `?familyId=${fixture.familyId}&status=inactive`);
-    expect(subfamily?.id).toBe(fixture.subfamilyId);
-    expect(subfamily?.archivedAt).toBeNull();
-    expect(await list('subfamilies', `?familyId=${fixture.familyId}&status=archived`)).toEqual([]);
+    // La categoría sigue como estaba: inactiva, NO archivada.
+    const [category] = await list('categories', `?subfamilyId=${fixture.subfamilyId}&status=inactive`);
+    expect(category?.id).toBe(fixture.categoryId);
+    expect(category?.archivedAt).toBeNull();
+    expect(await list('categories', `?subfamilyId=${fixture.subfamilyId}&status=archived`)).toEqual([]);
 
     // Y el ítem tampoco se tocó: sigue activo, solo que oculto por su
     // ascendencia, así que no sale bajo "activos" del catálogo... sí sale,
@@ -156,21 +156,21 @@ describe('archiving categories, families and subfamilies', () => {
     // debe estar es archivado.
     const itemsResponse = await app.inject({
       method: 'GET',
-      url: `/catalog/items?subfamilyId=${fixture.subfamilyId}&status=archived`,
+      url: `/catalog/items?categoryId=${fixture.categoryId}&status=archived`,
       headers: { cookie },
     });
     expect((itemsResponse.json() as { items: Node[] }).items).toEqual([]);
 
-    await restore('categories', fixture.categoryId);
+    await restore('families', fixture.familyId);
     await app.inject({
       method: 'PATCH',
-      url: `/catalog/categories/${fixture.categoryId}`,
+      url: `/catalog/families/${fixture.familyId}`,
       headers: { cookie, 'x-csrf-token': csrfToken },
       payload: { status: 'active' },
     });
     await app.inject({
       method: 'PATCH',
-      url: `/catalog/subfamilies/${fixture.subfamilyId}`,
+      url: `/catalog/categories/${fixture.categoryId}`,
       headers: { cookie, 'x-csrf-token': csrfToken },
       payload: { status: 'active' },
     });
@@ -178,21 +178,21 @@ describe('archiving categories, families and subfamilies', () => {
   });
 
   it('refuses to hang new children off an archived parent', async () => {
-    expect((await archive('categories', fixture.categoryId)).statusCode).toBe(200);
+    expect((await archive('families', fixture.familyId)).statusCode).toBe(200);
 
-    const family = await app.inject({
+    const subfamily = await app.inject({
       method: 'POST',
-      url: '/catalog/families',
+      url: '/catalog/subfamilies',
       headers: { cookie, 'x-csrf-token': csrfToken },
-      payload: { categoryId: fixture.categoryId, name: '__tree_archive_test_orphan__' },
+      payload: { familyId: fixture.familyId, name: '__tree_archive_test_orphan__' },
     });
-    expect(family.statusCode).toBe(409);
-    expect((family.json() as { error: string }).error).toBe('parent_archived');
+    expect(subfamily.statusCode).toBe(409);
+    expect((subfamily.json() as { error: string }).error).toBe('parent_archived');
 
-    await restore('categories', fixture.categoryId);
+    await restore('families', fixture.familyId);
     await app.inject({
       method: 'PATCH',
-      url: `/catalog/categories/${fixture.categoryId}`,
+      url: `/catalog/families/${fixture.familyId}`,
       headers: { cookie, 'x-csrf-token': csrfToken },
       payload: { status: 'active' },
     });
@@ -201,33 +201,33 @@ describe('archiving categories, families and subfamilies', () => {
   it('renames a level and refuses to edit an archived one', async () => {
     const renamed = await app.inject({
       method: 'PATCH',
-      url: `/catalog/families/${fixture.familyId}`,
+      url: `/catalog/subfamilies/${fixture.subfamilyId}`,
       headers: { cookie, 'x-csrf-token': csrfToken },
       payload: { name: '__tree_archive_test_renamed__' },
     });
     expect(renamed.statusCode).toBe(200);
     expect((renamed.json() as { node: Node }).node.name).toBe('__tree_archive_test_renamed__');
 
-    await archive('families', fixture.familyId);
+    await archive('subfamilies', fixture.subfamilyId);
     const blocked = await app.inject({
       method: 'PATCH',
-      url: `/catalog/families/${fixture.familyId}`,
+      url: `/catalog/subfamilies/${fixture.subfamilyId}`,
       headers: { cookie, 'x-csrf-token': csrfToken },
       payload: { name: 'no debería pasar' },
     });
     expect(blocked.statusCode).toBe(409);
     expect((blocked.json() as { error: string }).error).toBe('node_archived');
 
-    expect((await archive('families', fixture.familyId)).statusCode).toBe(409);
-    await restore('families', fixture.familyId);
-    expect((await restore('families', fixture.familyId)).statusCode).toBe(409);
+    expect((await archive('subfamilies', fixture.subfamilyId)).statusCode).toBe(409);
+    await restore('subfamilies', fixture.subfamilyId);
+    expect((await restore('subfamilies', fixture.subfamilyId)).statusCode).toBe(409);
   });
 
   it('records every level change in the audit trail', async () => {
     for (const [key, id] of [
-      ['catalog.category_archived', fixture.categoryId],
       ['catalog.family_archived', fixture.familyId],
       ['catalog.subfamily_archived', fixture.subfamilyId],
+      ['catalog.category_archived', fixture.categoryId],
     ] as const) {
       const events = await findAuditEvents(key, String(id));
       expect(events.length).toBeGreaterThan(0);
@@ -236,7 +236,7 @@ describe('archiving categories, families and subfamilies', () => {
   });
 
   it('404s for an unknown id at every level', async () => {
-    for (const path of ['categories', 'families', 'subfamilies']) {
+    for (const path of ['families', 'subfamilies', 'categories']) {
       expect((await archive(path, 99_999_999)).statusCode).toBe(404);
       expect((await restore(path, 99_999_999)).statusCode).toBe(404);
     }
@@ -244,34 +244,34 @@ describe('archiving categories, families and subfamilies', () => {
 
   it('lists every state at once with status=all, so no branch is unreachable', async () => {
     // De esto dependen los selectores de padre de las pantallas del catálogo:
-    // una subfamilia puede colgar de una familia pausada, y si el selector
+    // una categoría puede colgar de una subfamilia pausada, y si el selector
     // solo ofreciera las activas esa rama entera quedaría fuera del alcance
     // de la interfaz -- justo lo contrario de archivar en vez de borrar.
-    const query = `?familyId=${fixture.familyId}`;
-    expect((await archive('subfamilies', fixture.subfamilyId)).statusCode).toBe(200);
+    const query = `?subfamilyId=${fixture.subfamilyId}`;
+    expect((await archive('categories', fixture.categoryId)).statusCode).toBe(200);
 
-    expect((await list('subfamilies', `${query}&status=active`)).map((n) => n.id)).not.toContain(
-      fixture.subfamilyId,
+    expect((await list('categories', `${query}&status=active`)).map((n) => n.id)).not.toContain(
+      fixture.categoryId,
     );
-    expect((await list('subfamilies', `${query}&status=all`)).map((n) => n.id)).toContain(
-      fixture.subfamilyId,
+    expect((await list('categories', `${query}&status=all`)).map((n) => n.id)).toContain(
+      fixture.categoryId,
     );
 
     // Y `all` no es un cuarto estado: trae exactamente los otros tres juntos.
     const byState = [
-      ...(await list('subfamilies', `${query}&status=active`)),
-      ...(await list('subfamilies', `${query}&status=inactive`)),
-      ...(await list('subfamilies', `${query}&status=archived`)),
+      ...(await list('categories', `${query}&status=active`)),
+      ...(await list('categories', `${query}&status=inactive`)),
+      ...(await list('categories', `${query}&status=archived`)),
     ];
-    expect((await list('subfamilies', `${query}&status=all`)).map((n) => n.id).sort()).toEqual(
+    expect((await list('categories', `${query}&status=all`)).map((n) => n.id).sort()).toEqual(
       byState.map((n) => n.id).sort(),
     );
 
-    expect((await restore('subfamilies', fixture.subfamilyId)).statusCode).toBe(200);
+    expect((await restore('categories', fixture.categoryId)).statusCode).toBe(200);
 
     const bogus = await app.inject({
       method: 'GET',
-      url: `/catalog/subfamilies${query}&status=todas`,
+      url: `/catalog/categories${query}&status=todas`,
       headers: { cookie },
     });
     expect(bogus.statusCode).toBe(400);

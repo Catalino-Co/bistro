@@ -14,7 +14,7 @@
 	import { toasts } from '$lib/toasts.svelte.js';
 
 	// Las estaciones vivían escondidas al final de la pantalla de Catálogo,
-	// entre las subfamilias y los ítems, aunque no son parte del menú sino
+	// entre las categorías y los ítems, aunque no son parte del menú sino
 	// del hardware del local. Aquí tienen su propia sección de ajustes.
 	interface KitchenStation {
 		id: number;

@@ -41,7 +41,7 @@ export interface DailySummary {
   openNow: { orderCount: number; total: string };
   tipTotal: string;
   payments: PaymentBreakdown[];
-  byCategory: SalesSlice[];
+  byFamily: SalesSlice[];
   byStation: SalesSlice[];
   byHour: HourSlice[];
 }
@@ -59,7 +59,7 @@ function money(value: number): string {
  *
  * Las ventas salen de las columnas congeladas de las órdenes cerradas, no
  * de recalcular líneas, por la misma razón que el historial: un cambio de
- * ITBIS no puede reescribir el cierre de ayer. Los desgloses por categoría
+ * ITBIS no puede reescribir el cierre de ayer. Los desgloses por familia
  * y por estación sí se calculan desde las líneas, porque esa dimensión no
  * está congelada en ningún sitio -- y usan `calculateLineTotal`, la misma
  * función que fija lo que cuesta una línea en el POS.
@@ -159,8 +159,8 @@ export async function getDailySummary(
     payments.sort((a, b) => Number(b.amount) - Number(a.amount));
   }
 
-  // --- desglose por categoría y por estación ---
-  const byCategory: SalesSlice[] = [];
+  // --- desglose por familia y por estación ---
+  const byFamily: SalesSlice[] = [];
   const byStation: SalesSlice[] = [];
   if (orderIds.length > 0) {
     const lineRows = await db
@@ -168,15 +168,15 @@ export async function getDailySummary(
         id: schema.orderLines.id,
         quantity: schema.orderLines.quantity,
         unitPrice: schema.orderLines.unitPrice,
-        categoryId: schema.categories.id,
-        categoryName: schema.categories.name,
+        familyId: schema.families.id,
+        familyName: schema.families.name,
         stationId: schema.items.stationId,
       })
       .from(schema.orderLines)
       .innerJoin(schema.items, eq(schema.items.id, schema.orderLines.itemId))
-      .innerJoin(schema.subfamilies, eq(schema.subfamilies.id, schema.items.subfamilyId))
+      .innerJoin(schema.categories, eq(schema.categories.id, schema.items.categoryId))
+      .innerJoin(schema.subfamilies, eq(schema.subfamilies.id, schema.categories.subfamilyId))
       .innerJoin(schema.families, eq(schema.families.id, schema.subfamilies.familyId))
-      .innerJoin(schema.categories, eq(schema.categories.id, schema.families.categoryId))
       .where(and(inArray(schema.orderLines.orderId, orderIds), isNull(schema.orderLines.voidedAt)));
 
     const deltasByLine = new Map<number, number[]>();
@@ -204,7 +204,7 @@ export async function getDailySummary(
       stationNames.set(station.id, station.name);
     }
 
-    const categoryTotals = new Map<number, { name: string; quantity: number; amount: number }>();
+    const familyTotals = new Map<number, { name: string; quantity: number; amount: number }>();
     const stationTotals = new Map<
       number | null,
       { name: string; quantity: number; amount: number }
@@ -217,14 +217,14 @@ export async function getDailySummary(
         deltasByLine.get(line.id) ?? [],
       );
 
-      const category = categoryTotals.get(line.categoryId) ?? {
-        name: line.categoryName,
+      const family = familyTotals.get(line.familyId) ?? {
+        name: line.familyName,
         quantity: 0,
         amount: 0,
       };
-      category.quantity += line.quantity;
-      category.amount += amount;
-      categoryTotals.set(line.categoryId, category);
+      family.quantity += line.quantity;
+      family.amount += amount;
+      familyTotals.set(line.familyId, family);
 
       const stationKey = line.stationId;
       const station = stationTotals.get(stationKey) ?? {
@@ -240,8 +240,8 @@ export async function getDailySummary(
       stationTotals.set(stationKey, station);
     }
 
-    for (const [id, value] of categoryTotals) {
-      byCategory.push({
+    for (const [id, value] of familyTotals) {
+      byFamily.push({
         id,
         name: value.name,
         quantity: value.quantity,
@@ -256,7 +256,7 @@ export async function getDailySummary(
         amount: money(value.amount),
       });
     }
-    byCategory.sort((a, b) => Number(b.amount) - Number(a.amount));
+    byFamily.sort((a, b) => Number(b.amount) - Number(a.amount));
     byStation.sort((a, b) => Number(b.amount) - Number(a.amount));
   }
 
@@ -307,7 +307,7 @@ export async function getDailySummary(
     openNow: { orderCount: openOrders.length, total: money(openTotal) },
     tipTotal: money(tipTotal),
     payments,
-    byCategory,
+    byFamily,
     byStation,
     byHour,
   };

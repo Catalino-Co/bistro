@@ -23,7 +23,7 @@ export const PERMISSIONS = [
   },
   {
     key: 'catalog.manage',
-    description: 'Create/edit categories, families, subfamilies, and items',
+    description: 'Create/edit families, subfamilies, categories, and items',
   },
   {
     key: 'floor.manage',
@@ -40,7 +40,7 @@ export const PERMISSIONS = [
   {
     key: 'reports.view',
     description:
-      "See the branch's sales figures: daily totals, average ticket, tips, sales by category and station",
+      "See the branch's sales figures: daily totals, average ticket, tips, sales by family and station",
   },
   {
     key: 'kitchen.manage',

@@ -13,7 +13,7 @@
 
 <PageHeader
 	title="Catálogo"
-	description="El menú se organiza en tres niveles —categoría, familia y subfamilia— y los ítems cuelgan del último."
+	description="El menú se organiza en tres niveles —familia, subfamilia y categoría— y los ítems cuelgan del último."
 />
 
 <CardNav items={CATALOG_ITEMS} label="Secciones del catálogo" />

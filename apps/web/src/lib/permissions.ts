@@ -49,7 +49,7 @@ export const PERMISSION_COPY: Record<string, PermissionCopy> = {
   },
   'catalog.manage': {
     label: 'Catálogo',
-    description: 'Crear y editar categorías, familias, subfamilias e ítems.',
+    description: 'Crear y editar familias, subfamilias, categorías e ítems.',
     group: 'Administración',
   },
   'floor.manage': {

@@ -129,6 +129,101 @@ describe('order lines routes', () => {
     expect((response.json() as { error: string }).error).toBe('modifier_not_allowed');
   });
 
+  it('rejects every modifier once the item has them switched off', async () => {
+    // El interruptor del item no vale nada si solo lo respeta la pantalla:
+    // un cliente que siga mandando el modificador tiene que chocar aqui.
+    const off = await app.inject({
+      method: 'PATCH',
+      url: `/catalog/items/${itemId}`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { usesModifiers: false },
+    });
+    expect(off.statusCode).toBe(200);
+    expect((off.json() as { item: { usesModifiers: boolean } }).item.usesModifiers).toBe(false);
+
+    const rejected = await app.inject({
+      method: 'POST',
+      url: `/orders/${orderId}/lines`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { itemId, quantity: 1, modifierIds: [modifierId] },
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect((rejected.json() as { error: string }).error).toBe('modifier_not_allowed');
+
+    // Pero el item se sigue vendiendo: lo que se apago son sus extras.
+    const plain = await app.inject({
+      method: 'POST',
+      url: `/orders/${orderId}/lines`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { itemId, quantity: 1 },
+    });
+    expect(plain.statusCode).toBe(201);
+
+    // Y apagar no borra nada: el grupo sigue asociado y al encender vuelve.
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/catalog/items/${itemId}/modifier-groups`,
+          headers: { cookie },
+        })
+      ).json() as { groups: unknown[] },
+    ).toHaveProperty('groups.length', 1);
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/catalog/items/${itemId}`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { usesModifiers: true },
+    });
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/orders/${orderId}/lines`,
+          headers: { cookie, 'x-csrf-token': csrfToken },
+          payload: { itemId, quantity: 1, modifierIds: [modifierId] },
+        })
+      ).statusCode,
+    ).toBe(201);
+  });
+
+  it('stops allowing a modifier once its group is taken off the item', async () => {
+    const groups = (
+      await app.inject({
+        method: 'GET',
+        url: `/catalog/items/${itemId}/modifier-groups`,
+        headers: { cookie },
+      })
+    ).json() as { groups: { id: number }[] };
+    const groupId = groups.groups[0]!.id;
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `/catalog/items/${itemId}/modifier-groups/${groupId}`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+    });
+    expect(removed.statusCode).toBe(204);
+
+    const rejected = await app.inject({
+      method: 'POST',
+      url: `/orders/${orderId}/lines`,
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      payload: { itemId, quantity: 1, modifierIds: [modifierId] },
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect((rejected.json() as { error: string }).error).toBe('modifier_not_allowed');
+
+    // Las lineas que ya lo llevaban conservan su modificador: lo que se pidio
+    // vive en `order_line_modifiers`, no en la asociacion del catalogo.
+    const lines = (
+      await app.inject({ method: 'GET', url: `/orders/${orderId}/lines`, headers: { cookie } })
+    ).json() as { lines: { modifiers: { modifierId: number }[] }[] };
+    expect(lines.lines.some((line) => line.modifiers.some((m) => m.modifierId === modifierId))).toBe(
+      true,
+    );
+  });
+
   it('rejects adding a line to a closed order', async () => {
     const totals = await app.inject({
       method: 'GET',

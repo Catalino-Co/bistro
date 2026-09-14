@@ -37,7 +37,7 @@ const MESSAGES: Record<string, string> = {
   item_archived: 'Ese ítem está archivado. Restáuralo antes de editarlo.',
   tax_rate_not_found: 'Ese impuesto ya no existe.',
 
-  // Archivar: compartido por ítems, categorías y clientes.
+  // Archivar: compartido por ítems, familias y clientes.
   already_archived: 'Ya estaba archivado.',
   not_archived: 'No está archivado.',
 

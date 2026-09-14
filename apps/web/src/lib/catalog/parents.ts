@@ -15,7 +15,7 @@ export interface ParentNode {
 
 /**
  * Un padre archivado se ve idéntico a uno activo si solo se pinta su nombre
- * -- y en esta base hay dos categorías llamadas «Bebidas», una archivada con
+ * -- y en esta base hay dos familias llamadas «Bebidas», una archivada con
  * todo el menú debajo y otra recién creada y vacía. Sin el sufijo, elegir la
  * equivocada deja la lista en blanco sin decir por qué.
  */

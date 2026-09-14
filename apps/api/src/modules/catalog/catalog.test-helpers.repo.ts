@@ -25,7 +25,7 @@ export async function deleteCatalogTestData(): Promise<void> {
   // sweep is about to delete too.
   await db.delete(schema.items).where(like(schema.items.name, pattern));
   await db.delete(schema.kitchenStations).where(like(schema.kitchenStations.name, pattern));
+  await db.delete(schema.categories).where(like(schema.categories.name, pattern));
   await db.delete(schema.subfamilies).where(like(schema.subfamilies.name, pattern));
   await db.delete(schema.families).where(like(schema.families.name, pattern));
-  await db.delete(schema.categories).where(like(schema.categories.name, pattern));
 }

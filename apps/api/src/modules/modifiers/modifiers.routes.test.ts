@@ -9,10 +9,10 @@ import {
   type BranchFixture,
 } from '../branches/branches.test-helpers.repo.js';
 import {
-  createCategory,
   createFamily,
-  createItem,
   createSubfamily,
+  createItem,
+  createCategory,
 } from '../catalog/catalog.repo.js';
 import { findTaxRateIdByName } from '../catalog/catalog.test-helpers.repo.js';
 import { deleteModifiersTestData } from './modifiers.test-helpers.repo.js';
@@ -33,11 +33,11 @@ describe('modifiers routes', () => {
     branch = await createBranchFixture('modifiers');
     await assignRole(userId, 'admin', branch.branchId);
 
-    const category = await createCategory('__modifiers_test_category__');
-    const family = await createFamily(category.id, '__modifiers_test_family__');
+    const family = await createFamily('__modifiers_test_family__');
     const subfamily = await createSubfamily(family.id, '__modifiers_test_subfamily__');
+    const category = await createCategory(subfamily.id, '__modifiers_test_category__');
     const taxRateId = await findTaxRateIdByName('ITBIS 18%');
-    const item = await createItem(subfamily.id, '__modifiers_test_item__', '100.0000', taxRateId);
+    const item = await createItem(category.id, '__modifiers_test_item__', '100.0000', taxRateId);
     itemId = item.id;
 
     const primed = await app.inject({ method: 'GET', url: '/health' });

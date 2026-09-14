@@ -129,7 +129,7 @@ describe('editing and archiving catalog items', () => {
       taxRateId: exemptRateId,
     });
 
-    const [stored] = await listItems(`?subfamilyId=${fixture.subfamilyId}`);
+    const [stored] = await listItems(`?categoryId=${fixture.categoryId}`);
     expect(stored).toMatchObject({ name: '__item_archive_test_renamed__', price: '250.0000' });
   });
 
@@ -156,10 +156,10 @@ describe('editing and archiving catalog items', () => {
     expect((await patch({ status: 'inactive' })).statusCode).toBe(200);
 
     // Sigue en el catálogo, bajo su filtro: es una pausa, no un retiro.
-    const inCatalog = await listItems(`?subfamilyId=${fixture.subfamilyId}&status=inactive`);
+    const inCatalog = await listItems(`?categoryId=${fixture.categoryId}&status=inactive`);
     expect(inCatalog.map((item) => item.id)).toEqual([itemId]);
     // Y ya no está bajo "activos".
-    expect(await listItems(`?subfamilyId=${fixture.subfamilyId}`)).toEqual([]);
+    expect(await listItems(`?categoryId=${fixture.categoryId}`)).toEqual([]);
     // Fuera del picker: no se puede vender.
     expect((await fullPicker()).find((item) => item.id === itemId)).toBeUndefined();
 
@@ -172,11 +172,11 @@ describe('editing and archiving catalog items', () => {
     expect(response.statusCode).toBe(200);
 
     // Igualdad exacta, no `not.toContain`: atrapa un filtro que solo reordena.
-    expect(await listItems(`?subfamilyId=${fixture.subfamilyId}`)).toEqual([]);
-    expect(await listItems(`?subfamilyId=${fixture.subfamilyId}&status=inactive`)).toEqual([]);
+    expect(await listItems(`?categoryId=${fixture.categoryId}`)).toEqual([]);
+    expect(await listItems(`?categoryId=${fixture.categoryId}&status=inactive`)).toEqual([]);
     expect((await fullPicker()).find((item) => item.id === itemId)).toBeUndefined();
 
-    const [archived] = await listItems(`?subfamilyId=${fixture.subfamilyId}&status=archived`);
+    const [archived] = await listItems(`?categoryId=${fixture.categoryId}&status=archived`);
     expect(archived?.id).toBe(itemId);
     expect(archived?.archivedAt).not.toBeNull();
     // La invariante: archivar fuerza inactivo, para que una consulta que solo
@@ -198,7 +198,7 @@ describe('editing and archiving catalog items', () => {
     const response = await restore();
     expect(response.statusCode).toBe(200);
 
-    const [restored] = await listItems(`?subfamilyId=${fixture.subfamilyId}&status=inactive`);
+    const [restored] = await listItems(`?categoryId=${fixture.categoryId}&status=inactive`);
     expect(restored?.id).toBe(itemId);
     expect(restored?.archivedAt).toBeNull();
     // Esta es la aserción que atrapa un restore que vuelve a poner algo a la

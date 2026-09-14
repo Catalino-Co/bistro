@@ -294,6 +294,7 @@ export async function addOrderLine(
         price: schema.items.price,
         status: schema.items.status,
         archivedAt: schema.items.archivedAt,
+        usesModifiers: schema.items.usesModifiers,
       })
       .from(schema.items)
       .where(eq(schema.items.id, itemId));
@@ -307,6 +308,12 @@ export async function addOrderLine(
     }
 
     const distinctModifierIds = [...new Set(modifierIds)];
+    // Un item con los modificadores apagados no acepta ninguno, tenga los
+    // grupos que tenga asociados. La pantalla ya no los ofrece, pero el
+    // interruptor no vale nada si solo lo respeta el cliente.
+    if (!item.usesModifiers && distinctModifierIds.length > 0) {
+      return { outcome: 'modifier_not_allowed' };
+    }
     let modifierRows: { id: number; name: string; priceDelta: string }[] = [];
     if (distinctModifierIds.length > 0) {
       modifierRows = await tx

@@ -23,11 +23,12 @@
 	}
 	interface Item {
 		id: number;
-		subfamilyId: number;
+		categoryId: number;
 		name: string;
 		price: string;
 		taxRateId: number;
 		stationId: number | null;
+		usesModifiers: boolean;
 		status: 'active' | 'inactive';
 		archivedAt: string | null;
 	}
@@ -56,15 +57,15 @@
 
 	// Los tres selectores reemplazan a las tres columnas del árbol que ocupaban
 	// la mitad de la pantalla para acabar siempre en lo mismo: elegir una
-	// subfamilia. Piden `status=all` porque un ítem puede colgar de una rama
+	// categoría. Piden `status=all` porque un ítem puede colgar de una rama
 	// pausada, y si el selector solo ofreciera las activas ese ítem quedaría
 	// fuera del alcance de la pantalla.
-	let categories = $state<TreeNode[]>([]);
 	let families = $state<TreeNode[]>([]);
 	let subfamilies = $state<TreeNode[]>([]);
-	let selectedCategoryId = $state<number | null>(null);
+	let categories = $state<TreeNode[]>([]);
 	let selectedFamilyId = $state<number | null>(null);
 	let selectedSubfamilyId = $state<number | null>(null);
+	let selectedCategoryId = $state<number | null>(null);
 
 	let items = $state<Item[]>([]);
 	let taxRates = $state<TaxRate[]>([]);
@@ -93,8 +94,8 @@
 	let modifierGroupToAssociate = $state<number | null>(null);
 
 	const selectedItem = $derived(items.find((item) => item.id === selectedItemId) ?? null);
-	const selectedSubfamily = $derived(
-		subfamilies.find((subfamily) => subfamily.id === selectedSubfamilyId) ?? null,
+	const selectedCategory = $derived(
+		categories.find((category) => category.id === selectedCategoryId) ?? null,
 	);
 
 	function stationName(stationId: number | null): string {
@@ -118,28 +119,11 @@
 		});
 	}
 
-	async function loadCategories() {
-		const response = await apiFetch('/catalog/categories?status=all');
-		if (response.ok) {
-			categories = ((await response.json()) as { categories: TreeNode[] }).categories;
-			if (selectedCategoryId === null) selectedCategoryId = defaultParentId(categories);
-		}
-	}
-
 	async function loadFamilies() {
-		if (selectedCategoryId === null) {
-			families = [];
-			selectedFamilyId = null;
-			return;
-		}
-		const response = await apiFetch(
-			`/catalog/families?categoryId=${selectedCategoryId}&status=all`,
-		);
+		const response = await apiFetch('/catalog/families?status=all');
 		if (response.ok) {
 			families = ((await response.json()) as { families: TreeNode[] }).families;
-			if (!families.some((family) => family.id === selectedFamilyId)) {
-				selectedFamilyId = defaultParentId(families);
-			}
+			if (selectedFamilyId === null) selectedFamilyId = defaultParentId(families);
 		}
 	}
 
@@ -160,14 +144,31 @@
 		}
 	}
 
+	async function loadCategories() {
+		if (selectedSubfamilyId === null) {
+			categories = [];
+			selectedCategoryId = null;
+			return;
+		}
+		const response = await apiFetch(
+			`/catalog/categories?subfamilyId=${selectedSubfamilyId}&status=all`,
+		);
+		if (response.ok) {
+			categories = ((await response.json()) as { categories: TreeNode[] }).categories;
+			if (!categories.some((category) => category.id === selectedCategoryId)) {
+				selectedCategoryId = defaultParentId(categories);
+			}
+		}
+	}
+
 	async function loadItems() {
 		selectedItemId = null;
-		if (selectedSubfamilyId === null) {
+		if (selectedCategoryId === null) {
 			items = [];
 			return;
 		}
 		const response = await apiFetch(
-			`/catalog/items?subfamilyId=${selectedSubfamilyId}&status=${statusFilter}`,
+			`/catalog/items?categoryId=${selectedCategoryId}&status=${statusFilter}`,
 		);
 		if (response.ok) {
 			items = ((await response.json()) as { items: Item[] }).items;
@@ -207,14 +208,14 @@
 		}
 	}
 
-	async function changeCategory() {
-		await loadFamilies();
+	async function changeFamily() {
 		await loadSubfamilies();
+		await loadCategories();
 		await loadItems();
 	}
 
-	async function changeFamily() {
-		await loadSubfamilies();
+	async function changeSubfamily() {
+		await loadCategories();
 		await loadItems();
 	}
 
@@ -247,7 +248,7 @@
 	async function save() {
 		const name = itemName.trim();
 		const price = itemPrice.trim();
-		if (!name || !price || selectedSubfamilyId === null || itemTaxRateId === null) return;
+		if (!name || !price || selectedCategoryId === null || itemTaxRateId === null) return;
 
 		const editing = formMode === 'edit' && editingItemId !== null;
 		saving = true;
@@ -260,7 +261,7 @@
 						editing
 							? { name, price, taxRateId: itemTaxRateId, status: itemStatus }
 							: {
-									subfamilyId: selectedSubfamilyId,
+									categoryId: selectedCategoryId,
 									name,
 									price,
 									taxRateId: itemTaxRateId,
@@ -330,6 +331,45 @@
 		);
 	}
 
+	/**
+	 * El interruptor no borra las asociaciones: apagarlo deja de ofrecer los
+	 * modificadores en el POS, y encenderlo los devuelve tal cual estaban. Es
+	 * la misma idea que archivar en vez de borrar, a escala de un ítem.
+	 */
+	async function setUsesModifiers(usesModifiers: boolean) {
+		if (selectedItemId === null) return;
+		const current = selectedItemId;
+		const response = await apiFetch(`/catalog/items/${current}`, {
+			method: 'PATCH',
+			body: JSON.stringify({ usesModifiers }),
+		});
+		if (!response.ok) {
+			toasts.error(await apiErrorMessage(response, 'No se pudo cambiar el ítem.'));
+			return;
+		}
+		await loadItems();
+		selectedItemId = current;
+		toasts.success(
+			usesModifiers
+				? 'Este ítem vuelve a ofrecer sus modificadores.'
+				: 'Este ítem deja de ofrecer modificadores en el POS.',
+		);
+	}
+
+	async function removeModifierGroup(groupId: number, name: string) {
+		if (selectedItemId === null) return;
+		const response = await apiFetch(
+			`/catalog/items/${selectedItemId}/modifier-groups/${groupId}`,
+			{ method: 'DELETE' },
+		);
+		if (!response.ok) {
+			toasts.error(await apiErrorMessage(response, 'No se pudo quitar el grupo.'));
+			return;
+		}
+		await loadItemModifierGroups(selectedItemId);
+		toasts.success(`«${name}» ya no aplica a este ítem.`);
+	}
+
 	async function associateModifierGroup() {
 		if (selectedItemId === null || modifierGroupToAssociate === null) return;
 		const response = await apiFetch('/catalog/items/modifier-groups', {
@@ -346,9 +386,9 @@
 
 	$effect(() => {
 		Promise.all([loadTaxRates(), loadAllModifierGroups(), loadKitchenStations()])
-			.then(() => loadCategories())
 			.then(() => loadFamilies())
 			.then(() => loadSubfamilies())
+			.then(() => loadCategories())
 			.then(() => loadItems())
 			.finally(() => {
 				loading = false;
@@ -358,25 +398,16 @@
 
 <PageHeader
 	title="Ítems"
-	description="Lo que se vende. Cada ítem cuelga de una subfamilia y lleva su precio, su impuesto y su estación de cocina."
+	description="Lo que se vende. Cada ítem cuelga de una categoría y lleva su precio, su impuesto y su estación de cocina."
 >
 	{#snippet actions()}
-		{#if selectedSubfamilyId !== null && statusFilter !== 'archived'}
+		{#if selectedCategoryId !== null && statusFilter !== 'archived'}
 			<Button variant="primary" icon="plus" onclick={startCreate}>Nuevo ítem</Button>
 		{/if}
 	{/snippet}
 </PageHeader>
 
 <div class="filters">
-	<Field label="Categoría">
-		{#snippet control({ id })}
-			<select {id} bind:value={selectedCategoryId} onchange={changeCategory}>
-				{#each categories as category (category.id)}
-					<option value={category.id}>{parentOptionLabel(category)}</option>
-				{/each}
-			</select>
-		{/snippet}
-	</Field>
 	<Field label="Familia">
 		{#snippet control({ id })}
 			<select {id} bind:value={selectedFamilyId} onchange={changeFamily}>
@@ -388,9 +419,18 @@
 	</Field>
 	<Field label="Subfamilia">
 		{#snippet control({ id })}
-			<select {id} bind:value={selectedSubfamilyId} onchange={() => loadItems()}>
+			<select {id} bind:value={selectedSubfamilyId} onchange={changeSubfamily}>
 				{#each subfamilies as subfamily (subfamily.id)}
 					<option value={subfamily.id}>{parentOptionLabel(subfamily)}</option>
+				{/each}
+			</select>
+		{/snippet}
+	</Field>
+	<Field label="Categoría">
+		{#snippet control({ id })}
+			<select {id} bind:value={selectedCategoryId} onchange={() => loadItems()}>
+				{#each categories as category (category.id)}
+					<option value={category.id}>{parentOptionLabel(category)}</option>
 				{/each}
 			</select>
 		{/snippet}
@@ -408,11 +448,11 @@
 
 {#if loading}
 	<Skeleton lines={5} />
-{:else if selectedSubfamilyId === null}
+{:else if selectedCategoryId === null}
 	<EmptyState
 		icon="catalog"
-		title="No hay subfamilias donde colgar un ítem"
-		description="Crea primero una categoría, una familia y una subfamilia."
+		title="No hay categorías donde colgar un ítem"
+		description="Crea primero una familia, una subfamilia y una categoría."
 	/>
 {:else}
 	<div class="columns">
@@ -421,7 +461,7 @@
 				<EmptyState
 					icon="plate"
 					title={statusFilter === 'active'
-						? `«${selectedSubfamily?.name ?? ''}» no tiene ítems activos`
+						? `«${selectedCategory?.name ?? ''}» no tiene ítems activos`
 						: statusFilter === 'inactive'
 							? 'Ninguno en pausa'
 							: 'Nada archivado aquí'}
@@ -534,6 +574,22 @@
 								</p>
 							{/if}
 						{:else if detailTab === 'modificadores'}
+							<label class="toggle">
+								<input
+									type="checkbox"
+									checked={selectedItem.usesModifiers}
+									onchange={(event) => setUsesModifiers(event.currentTarget.checked)}
+								/>
+								<span>
+									<span class="toggle-label">Este ítem lleva modificadores</span>
+									<span class="toggle-hint">
+										{selectedItem.usesModifiers
+											? 'Al pedirlo, el POS ofrece los grupos de abajo.'
+											: 'Apagado: el POS no ofrece ninguno. Los grupos se conservan.'}
+									</span>
+								</span>
+							</label>
+
 							{#if itemModifierGroups.length === 0}
 								<p class="muted">Este ítem no tiene grupos de modificadores.</p>
 							{:else}
@@ -543,6 +599,15 @@
 											<Badge tone="neutral">
 												{group.selectionType === 'single' ? 'Elige uno' : 'Elige varios'}
 											</Badge>
+											{#snippet actions()}
+												<Button
+													size="sm"
+													variant="ghost"
+													icon="trash"
+													aria-label="Quitar {group.name} de este ítem"
+													onclick={() => removeModifierGroup(group.id, group.name)}
+												/>
+											{/snippet}
 										</DataListRow>
 									{/each}
 								</DataList>
@@ -610,7 +675,7 @@
 <Modal
 	bind:open={formOpen}
 	title={formMode === 'create' ? 'Nuevo ítem' : 'Editar ítem'}
-	description={selectedSubfamily?.name}
+	description={selectedCategory?.name}
 >
 	<Field label="Nombre" bind:value={itemName} required placeholder="Mofongo de camarones" />
 	<Field
@@ -791,6 +856,46 @@
 	.facts dd {
 		margin: 0;
 		font-weight: 600;
+	}
+
+	/* `flex-direction` y el color van explicitos: `tokens.css` tiene un
+	   `label { display: inline-flex; flex-direction: column; color: muted }`
+	   global, y los estilos de componente de Svelte se compilan con
+	   `:where()`, que no suma especificidad. El selector de elemento gana. */
+	.toggle {
+		display: flex;
+		flex-direction: row;
+		align-items: flex-start;
+		gap: var(--space-3);
+		color: var(--color-text);
+		font-size: var(--text-md);
+		padding: var(--space-3);
+		background: var(--color-surface-sunk);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+	}
+
+	.toggle input {
+		margin-top: 2px;
+		width: 18px;
+		height: 18px;
+		flex-shrink: 0;
+	}
+
+	.toggle span {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	.toggle-label {
+		font-weight: 600;
+	}
+
+	.toggle-hint {
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
 	}
 
 	.inline-form {

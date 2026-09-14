@@ -12,8 +12,9 @@
 		id: number;
 		name: string;
 		price: string;
-		categoryId: number;
-		categoryName: string;
+		familyId: number;
+		familyName: string;
+		usesModifiers: boolean;
 	}
 	interface ModifierGroup {
 		id: number;
@@ -71,7 +72,7 @@
 	};
 
 	let items = $state<Item[]>([]);
-	let selectedCategoryName = $state<string | null>(null);
+	let selectedFamilyName = $state<string | null>(null);
 	let lines = $state<OrderLine[]>([]);
 	let orderDetail = $state<OrderDetail | null>(null);
 	let totals = $state<Totals | null>(null);
@@ -131,20 +132,20 @@
 		return Math.round(perUnit * line.quantity * 10000) / 10000;
 	}
 
-	function categoryNames(): string[] {
-		return [...new Set(items.map((i) => i.categoryName))];
+	function familyNames(): string[] {
+		return [...new Set(items.map((i) => i.familyName))];
 	}
 
-	function itemsInCategory(categoryName: string | null): Item[] {
-		return items.filter((i) => i.categoryName === categoryName);
+	function itemsInFamily(familyName: string | null): Item[] {
+		return items.filter((i) => i.familyName === familyName);
 	}
 
 	async function loadItems() {
 		const response = await apiFetch('/catalog/items/full');
 		if (response.ok) {
 			items = ((await response.json()) as { items: Item[] }).items;
-			if (selectedCategoryName === null && items.length > 0) {
-				selectedCategoryName = items[0]!.categoryName;
+			if (selectedFamilyName === null && items.length > 0) {
+				selectedFamilyName = items[0]!.familyName;
 			}
 		}
 	}
@@ -220,6 +221,14 @@
 
 	async function loadModifiersForItem(itemId: number) {
 		modifiersByGroup = {};
+		// Un ítem con los modificadores apagados no abre el paso: no todos los
+		// platos llevan los mismos, y unos cuantos no llevan ninguno. Sus
+		// grupos siguen guardados, solo que no se ofrecen aquí. La API lo
+		// vuelve a comprobar al añadir la línea.
+		if (!items.find((item) => item.id === itemId)?.usesModifiers) {
+			itemModifierGroups = [];
+			return;
+		}
 		const response = await apiFetch(`/catalog/items/${itemId}/modifier-groups`);
 		if (!response.ok) {
 			itemModifierGroups = [];
@@ -384,21 +393,21 @@
 			{/if}
 		</header>
 
-		<div class="category-pills">
-			{#each categoryNames() as category (category)}
+		<div class="family-pills">
+			{#each familyNames() as family (family)}
 				<button
 					type="button"
 					class="pill"
-					class:active={selectedCategoryName === category}
-					onclick={() => (selectedCategoryName = category)}
+					class:active={selectedFamilyName === family}
+					onclick={() => (selectedFamilyName = family)}
 				>
-					{category}
+					{family}
 				</button>
 			{/each}
 		</div>
 
 		<div class="item-grid">
-			{#each itemsInCategory(selectedCategoryName) as item (item.id)}
+			{#each itemsInFamily(selectedFamilyName) as item (item.id)}
 				<button
 					type="button"
 					class="item-card"
@@ -633,7 +642,7 @@
 		margin: 0;
 	}
 
-	.category-pills {
+	.family-pills {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.5rem;

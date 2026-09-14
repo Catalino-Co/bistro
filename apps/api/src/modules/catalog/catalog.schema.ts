@@ -4,18 +4,18 @@ export const nameBodySchema = z.object({
   name: z.string().min(1).max(200),
 });
 
-export const familyBodySchema = z.object({
-  categoryId: z.number().int().positive(),
-  name: z.string().min(1).max(200),
-});
-
 export const subfamilyBodySchema = z.object({
   familyId: z.number().int().positive(),
   name: z.string().min(1).max(200),
 });
 
-export const itemBodySchema = z.object({
+export const categoryBodySchema = z.object({
   subfamilyId: z.number().int().positive(),
+  name: z.string().min(1).max(200),
+});
+
+export const itemBodySchema = z.object({
+  categoryId: z.number().int().positive(),
   name: z.string().min(1).max(200),
   price: z.string().regex(/^\d+(\.\d{1,4})?$/, 'Expected a decimal string'),
   taxRateId: z.number().int().positive(),
@@ -35,12 +35,12 @@ export const listNodesQuerySchema = z.object({
   status: z.enum(['active', 'inactive', 'archived', 'all']).default('active'),
 });
 
-export const listFamiliesQuerySchema = listNodesQuerySchema.extend({
-  categoryId: z.coerce.number().int().positive().optional(),
-});
-
 export const listSubfamiliesQuerySchema = listNodesQuerySchema.extend({
   familyId: z.coerce.number().int().positive().optional(),
+});
+
+export const listCategoriesQuerySchema = listNodesQuerySchema.extend({
+  subfamilyId: z.coerce.number().int().positive().optional(),
 });
 
 // Lo que se puede editar de un item. `archived` NO esta aqui a proposito:
@@ -55,11 +55,14 @@ export const updateItemBodySchema = z
       .optional(),
     taxRateId: z.number().int().positive().optional(),
     status: z.enum(['active', 'inactive']).optional(),
+    // Si es `false`, el item no ofrece modificadores en el POS aunque tenga
+    // grupos asociados. No los borra: apagar y encender no pierde nada.
+    usesModifiers: z.boolean().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, { message: 'nada que actualizar' });
 
 export const listItemsQuerySchema = z.object({
-  subfamilyId: z.coerce.number().int().positive().optional(),
+  categoryId: z.coerce.number().int().positive().optional(),
   // Por defecto lo que se quiere ver primero. Los inactivos y los archivados
   // estan a un clic en el select del catalogo.
   status: z.enum(['active', 'inactive', 'archived']).default('active'),

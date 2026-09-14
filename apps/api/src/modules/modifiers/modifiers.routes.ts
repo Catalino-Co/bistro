@@ -3,6 +3,7 @@ import {
   associateModifierGroupWithItem,
   createModifier,
   createModifierGroup,
+  disassociateModifierGroupFromItem,
   listModifierGroups,
   listModifierGroupsForItem,
   listModifiers,
@@ -78,6 +79,17 @@ export async function modifiersRoutes(app: FastifyInstance) {
         return { error: 'invalid_request' };
       }
       await associateModifierGroupWithItem(parsed.data.itemId, parsed.data.modifierGroupId);
+      reply.code(204);
+      return null;
+    },
+  );
+
+  app.delete(
+    '/catalog/items/:itemId/modifier-groups/:groupId',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async (request, reply) => {
+      const { itemId, groupId } = request.params as { itemId: string; groupId: string };
+      await disassociateModifierGroupFromItem(Number(itemId), Number(groupId));
       reply.code(204);
       return null;
     },
