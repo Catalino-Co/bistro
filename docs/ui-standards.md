@@ -46,7 +46,7 @@ quedarse encerrado.
 el del árbol (categoría → familia → subfamilia → ítem), con lo transversal
 al final.
 
-Ejemplo vivo: `/menu`.
+Ejemplos vivos: `/menu` y `/settings`.
 
 ### Lo que esto NO es
 
@@ -55,11 +55,13 @@ Estación en la ficha de un ítem) no son navegación de módulo: son facetas
 del mismo registro que ya está abierto, y ahí una pestaña está bien. La
 regla es para las secciones de un módulo.
 
-## Pendientes
+### Lo que se gana, medido
 
-- `/settings` todavía entra por redirección a la primera sección y usa una
-  sub-navegación lateral. Debe pasar al índice de tarjetas: son ocho
-  secciones, el caso que más lo pide.
+Ajustes eran ocho secciones tras una sub-navegación lateral de 232 px que
+se llevaba un cuarto del ancho en cada una de ellas. Auditoría —una tabla
+de seis columnas— se quedaba sin sitio y cortaba las dos últimas. Al pasar
+a tarjetas, esa columna desaparece de las ocho pantallas y la tabla entra
+entera.
 
 ## Otras reglas ya en pie
 

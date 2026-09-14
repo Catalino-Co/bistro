@@ -47,18 +47,65 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-// Sub-navegación de Ajustes. Las ocho secciones que salieron de la barra
-// principal viven aquí dentro; las que aún no existen se marcan igual que
-// arriba en vez de desaparecer.
-export const SETTINGS_ITEMS: NavItem[] = [
-  { href: '/settings/branches', label: 'Sucursales', icon: 'home' },
-  { href: '/settings/floor', label: 'Áreas y mesas', icon: 'tables' },
-  { href: '/settings/stations', label: 'Estaciones e impresoras', icon: 'kitchen' },
-  { href: '/settings/payments', label: 'Métodos de pago', icon: 'payment', pending: 'Fase 4' },
-  { href: '/settings/taxes', label: 'Impuestos', icon: 'catalog', pending: 'Fase 4' },
-  { href: '/settings/users', label: 'Usuarios', icon: 'user' },
-  { href: '/settings/roles', label: 'Roles y permisos', icon: 'roles' },
-  { href: '/settings/audit', label: 'Auditoría', icon: 'lock' },
+// Las ocho secciones de Ajustes: todo lo que se configura una vez y no se
+// vuelve a tocar. Se dibujan como tarjetas, igual que el Catálogo -- ver
+// `docs/ui-standards.md`. Las que aún no existen se marcan en vez de
+// desaparecer: preferimos enseñar la estructura completa a esconderla.
+//
+// El orden es el del montaje de un local: primero dónde se vende, luego
+// cómo sale la comida, luego con qué se cobra, luego quién entra, y al
+// final el registro de lo que se hizo.
+export const SETTINGS_ITEMS: CardNavItem[] = [
+  {
+    href: '/settings/branches',
+    label: 'Sucursales',
+    description: 'Los locales, su zona horaria y su impresora de caja',
+    icon: 'home',
+  },
+  {
+    href: '/settings/floor',
+    label: 'Áreas y mesas',
+    description: 'Cómo se divide el salón y cuántos puestos tiene cada mesa',
+    icon: 'tables',
+  },
+  {
+    href: '/settings/stations',
+    label: 'Estaciones e impresoras',
+    description: 'A qué cocina y a qué impresora sale cada comanda',
+    icon: 'kitchen',
+  },
+  {
+    href: '/settings/payments',
+    label: 'Métodos de pago',
+    description: 'Con qué se puede cobrar una orden',
+    icon: 'payment',
+    pending: 'Fase 4',
+  },
+  {
+    href: '/settings/taxes',
+    label: 'Impuestos',
+    description: 'Las tasas que se aplican al precio de un ítem',
+    icon: 'catalog',
+    pending: 'Fase 4',
+  },
+  {
+    href: '/settings/users',
+    label: 'Usuarios',
+    description: 'Quién entra al sistema y con qué rol en cada sucursal',
+    icon: 'user',
+  },
+  {
+    href: '/settings/roles',
+    label: 'Roles y permisos',
+    description: 'Qué puede hacer cada rol dentro de la app',
+    icon: 'roles',
+  },
+  {
+    href: '/settings/audit',
+    label: 'Auditoría',
+    description: 'Quién hizo qué, cuándo y desde dónde',
+    icon: 'lock',
+  },
 ];
 
 // Las secciones del Catálogo, en el orden del árbol: una categoría contiene
