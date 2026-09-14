@@ -1,5 +1,6 @@
 import { db, schema } from '@bistro/db';
 import { and, eq, isNull, sql } from 'drizzle-orm';
+import type { PgColumn } from 'drizzle-orm/pg-core';
 import { recordAuditEvent } from '../audit/audit.repo.js';
 
 export interface TaxRateRow {
@@ -18,20 +19,44 @@ export interface CategoryRow {
   id: number;
   name: string;
   status: 'active' | 'inactive';
+  archivedAt: Date | null;
 }
 
-export async function listCategories(): Promise<CategoryRow[]> {
+const CATEGORY_COLUMNS = {
+  id: schema.categories.id,
+  name: schema.categories.name,
+  status: schema.categories.status,
+  archivedAt: schema.categories.archivedAt,
+};
+
+/**
+ * Los cuatro niveles del catalogo comparten estado y filtro. `archived`
+ * mira el timestamp; `active`/`inactive` miran el status Y exigen no
+ * archivado, porque archivar fuerza inactive y si no un archivado saldria
+ * tambien bajo "inactivos".
+ */
+export type NodeStatusFilter = 'active' | 'inactive' | 'archived';
+
+function statusCondition(
+  statusColumn: PgColumn,
+  archivedColumn: PgColumn,
+  filter: NodeStatusFilter,
+) {
+  if (filter === 'archived') {
+    return sql`${archivedColumn} is not null`;
+  }
+  return and(eq(statusColumn, filter), isNull(archivedColumn));
+}
+
+export async function listCategories(filter: NodeStatusFilter = 'active'): Promise<CategoryRow[]> {
   return db
-    .select({
-      id: schema.categories.id,
-      name: schema.categories.name,
-      status: schema.categories.status,
-    })
-    .from(schema.categories);
+    .select(CATEGORY_COLUMNS)
+    .from(schema.categories)
+    .where(statusCondition(schema.categories.status, schema.categories.archivedAt, filter));
 }
 
 export async function createCategory(name: string): Promise<CategoryRow> {
-  const [row] = await db.insert(schema.categories).values({ name }).returning();
+  const [row] = await db.insert(schema.categories).values({ name }).returning(CATEGORY_COLUMNS);
   if (!row) throw new Error('Failed to create category');
   return row;
 }
@@ -41,22 +66,36 @@ export interface FamilyRow {
   categoryId: number;
   name: string;
   status: 'active' | 'inactive';
+  archivedAt: Date | null;
 }
 
-export async function listFamilies(categoryId?: number): Promise<FamilyRow[]> {
-  const query = db
-    .select({
-      id: schema.families.id,
-      categoryId: schema.families.categoryId,
-      name: schema.families.name,
-      status: schema.families.status,
-    })
-    .from(schema.families);
-  return categoryId !== undefined ? query.where(eq(schema.families.categoryId, categoryId)) : query;
+const FAMILY_COLUMNS = {
+  id: schema.families.id,
+  categoryId: schema.families.categoryId,
+  name: schema.families.name,
+  status: schema.families.status,
+  archivedAt: schema.families.archivedAt,
+};
+
+export async function listFamilies(
+  categoryId?: number,
+  filter: NodeStatusFilter = 'active',
+): Promise<FamilyRow[]> {
+  const conditions = [statusCondition(schema.families.status, schema.families.archivedAt, filter)];
+  if (categoryId !== undefined) {
+    conditions.push(eq(schema.families.categoryId, categoryId));
+  }
+  return db
+    .select(FAMILY_COLUMNS)
+    .from(schema.families)
+    .where(and(...conditions));
 }
 
 export async function createFamily(categoryId: number, name: string): Promise<FamilyRow> {
-  const [row] = await db.insert(schema.families).values({ categoryId, name }).returning();
+  const [row] = await db
+    .insert(schema.families)
+    .values({ categoryId, name })
+    .returning(FAMILY_COLUMNS);
   if (!row) throw new Error('Failed to create family');
   return row;
 }
@@ -66,24 +105,196 @@ export interface SubfamilyRow {
   familyId: number;
   name: string;
   status: 'active' | 'inactive';
+  archivedAt: Date | null;
 }
 
-export async function listSubfamilies(familyId?: number): Promise<SubfamilyRow[]> {
-  const query = db
-    .select({
-      id: schema.subfamilies.id,
-      familyId: schema.subfamilies.familyId,
-      name: schema.subfamilies.name,
-      status: schema.subfamilies.status,
-    })
-    .from(schema.subfamilies);
-  return familyId !== undefined ? query.where(eq(schema.subfamilies.familyId, familyId)) : query;
+const SUBFAMILY_COLUMNS = {
+  id: schema.subfamilies.id,
+  familyId: schema.subfamilies.familyId,
+  name: schema.subfamilies.name,
+  status: schema.subfamilies.status,
+  archivedAt: schema.subfamilies.archivedAt,
+};
+
+export async function listSubfamilies(
+  familyId?: number,
+  filter: NodeStatusFilter = 'active',
+): Promise<SubfamilyRow[]> {
+  const conditions = [
+    statusCondition(schema.subfamilies.status, schema.subfamilies.archivedAt, filter),
+  ];
+  if (familyId !== undefined) {
+    conditions.push(eq(schema.subfamilies.familyId, familyId));
+  }
+  return db
+    .select(SUBFAMILY_COLUMNS)
+    .from(schema.subfamilies)
+    .where(and(...conditions));
 }
 
 export async function createSubfamily(familyId: number, name: string): Promise<SubfamilyRow> {
-  const [row] = await db.insert(schema.subfamilies).values({ familyId, name }).returning();
+  const [row] = await db
+    .insert(schema.subfamilies)
+    .values({ familyId, name })
+    .returning(SUBFAMILY_COLUMNS);
   if (!row) throw new Error('Failed to create subfamily');
   return row;
+}
+
+export type TreeLevel = 'category' | 'family' | 'subfamily';
+
+export type TreeNodeRow = {
+  id: number;
+  name: string;
+  status: 'active' | 'inactive';
+  archivedAt: Date | null;
+};
+
+export type UpdateNodeResult =
+  { outcome: 'updated'; node: TreeNodeRow } | { outcome: 'not_found' } | { outcome: 'archived' };
+
+export type ArchiveNodeResult =
+  | { outcome: 'archived'; node: TreeNodeRow }
+  | { outcome: 'not_found' }
+  | { outcome: 'already_archived' };
+
+export type RestoreNodeResult =
+  | { outcome: 'restored'; node: TreeNodeRow }
+  | { outcome: 'not_found' }
+  | { outcome: 'not_archived' };
+
+// Las tres tablas del arbol tienen la misma forma (id, name, status,
+// archivedAt) y las mismas reglas, asi que las operaciones se escriben una
+// vez y se despachan por nivel. Escribirlas tres veces era la via rapida a
+// que una de ellas olvidara la invariante de archivar.
+const TREE_TABLES = {
+  category: schema.categories,
+  family: schema.families,
+  subfamily: schema.subfamilies,
+} as const;
+
+const TREE_ENTITY: Record<TreeLevel, string> = {
+  category: 'category',
+  family: 'family',
+  subfamily: 'subfamily',
+};
+
+function treeColumns(level: TreeLevel) {
+  const table = TREE_TABLES[level];
+  return { id: table.id, name: table.name, status: table.status, archivedAt: table.archivedAt };
+}
+
+async function readNode(level: TreeLevel, id: number): Promise<TreeNodeRow | undefined> {
+  const [row] = await db
+    .select(treeColumns(level))
+    .from(TREE_TABLES[level])
+    .where(eq(TREE_TABLES[level].id, id));
+  return row;
+}
+
+export async function updateTreeNode(
+  level: TreeLevel,
+  id: number,
+  patch: { name?: string | undefined; status?: ('active' | 'inactive') | undefined },
+  actorUserId: number,
+  branchId?: number,
+): Promise<UpdateNodeResult> {
+  const before = await readNode(level, id);
+  if (!before) return { outcome: 'not_found' };
+  if (before.archivedAt !== null) return { outcome: 'archived' };
+
+  const values: { name?: string; status?: 'active' | 'inactive' } = {};
+  if (patch.name !== undefined) values.name = patch.name;
+  if (patch.status !== undefined) values.status = patch.status;
+  if (Object.keys(values).length === 0) return { outcome: 'updated', node: before };
+
+  const [row] = await db
+    .update(TREE_TABLES[level])
+    .set(values)
+    .where(eq(TREE_TABLES[level].id, id))
+    .returning(treeColumns(level));
+  if (!row) throw new Error(`Failed to update ${level}`);
+
+  const previous: Record<string, unknown> = {};
+  for (const key of Object.keys(values)) {
+    previous[key] = before[key as keyof TreeNodeRow];
+  }
+  await recordAuditEvent({
+    actionKey: `catalog.${level}_updated`,
+    entityType: TREE_ENTITY[level],
+    entityId: String(id),
+    beforeData: previous,
+    afterData: values,
+    userId: actorUserId,
+    branchId,
+  });
+  return { outcome: 'updated', node: row };
+}
+
+/**
+ * Archivar un nivel del arbol no escribe nada en sus hijos: lo que los saca
+ * del POS es que el picker exige toda la ascendencia vendible. Restaurar
+ * devuelve entonces el estado exacto que cada hijo tenia.
+ */
+export async function archiveTreeNode(
+  level: TreeLevel,
+  id: number,
+  actorUserId: number,
+  branchId?: number,
+): Promise<ArchiveNodeResult> {
+  const before = await readNode(level, id);
+  if (!before) return { outcome: 'not_found' };
+  if (before.archivedAt !== null) return { outcome: 'already_archived' };
+
+  const [row] = await db
+    .update(TREE_TABLES[level])
+    // Misma invariante que en items: el timestamp va acompanado de
+    // status = 'inactive' para que una consulta que solo mire el status
+    // siga excluyendo lo archivado.
+    .set({ archivedAt: new Date(), status: 'inactive' })
+    .where(eq(TREE_TABLES[level].id, id))
+    .returning(treeColumns(level));
+  if (!row) throw new Error(`Failed to archive ${level}`);
+
+  await recordAuditEvent({
+    actionKey: `catalog.${level}_archived`,
+    entityType: TREE_ENTITY[level],
+    entityId: String(id),
+    beforeData: { archivedAt: null, status: before.status },
+    afterData: { archivedAt: row.archivedAt?.toISOString(), status: 'inactive' },
+    userId: actorUserId,
+    branchId,
+  });
+  return { outcome: 'archived', node: row };
+}
+
+export async function restoreTreeNode(
+  level: TreeLevel,
+  id: number,
+  actorUserId: number,
+  branchId?: number,
+): Promise<RestoreNodeResult> {
+  const before = await readNode(level, id);
+  if (!before) return { outcome: 'not_found' };
+  if (before.archivedAt === null) return { outcome: 'not_archived' };
+
+  const [row] = await db
+    .update(TREE_TABLES[level])
+    .set({ archivedAt: null, status: 'inactive' })
+    .where(eq(TREE_TABLES[level].id, id))
+    .returning(treeColumns(level));
+  if (!row) throw new Error(`Failed to restore ${level}`);
+
+  await recordAuditEvent({
+    actionKey: `catalog.${level}_restored`,
+    entityType: TREE_ENTITY[level],
+    entityId: String(id),
+    beforeData: { archivedAt: before.archivedAt.toISOString() },
+    afterData: { archivedAt: null, status: 'inactive' },
+    userId: actorUserId,
+    branchId,
+  });
+  return { outcome: 'restored', node: row };
 }
 
 export interface ItemRow {
@@ -111,6 +322,59 @@ const ITEM_COLUMNS = {
 // Lo unico que se puede vender: activo Y no archivado. Definido una sola vez
 // para que ningun sitio se quede con media condicion.
 const sellableItem = and(eq(schema.items.status, 'active'), isNull(schema.items.archivedAt));
+
+// Lo mismo, extendido a los tres niveles de arriba. Solo se usa donde hay
+// join hasta categorias (el picker del POS y el guard de addOrderLine).
+const sellableWithAncestry = and(
+  sellableItem,
+  eq(schema.subfamilies.status, 'active'),
+  isNull(schema.subfamilies.archivedAt),
+  eq(schema.families.status, 'active'),
+  isNull(schema.families.archivedAt),
+  eq(schema.categories.status, 'active'),
+  isNull(schema.categories.archivedAt),
+);
+
+/**
+ * Si un item se puede vender hoy, mirando tambien su ascendencia. Lo usa el
+ * guard de addOrderLine, que sin esto aceptaria un item cuya categoria se
+ * acaba de archivar solo porque el item en si sigue activo.
+ */
+export async function isItemSellable(itemId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.items.id })
+    .from(schema.items)
+    .innerJoin(schema.subfamilies, eq(schema.subfamilies.id, schema.items.subfamilyId))
+    .innerJoin(schema.families, eq(schema.families.id, schema.subfamilies.familyId))
+    .innerJoin(schema.categories, eq(schema.categories.id, schema.families.categoryId))
+    .where(and(eq(schema.items.id, itemId), sellableWithAncestry));
+  return row !== undefined;
+}
+
+/** Si el padre esta archivado, no se le pueden colgar hijos nuevos. */
+export async function isCategoryArchived(id: number): Promise<boolean> {
+  const [row] = await db
+    .select({ archivedAt: schema.categories.archivedAt })
+    .from(schema.categories)
+    .where(eq(schema.categories.id, id));
+  return row?.archivedAt != null;
+}
+
+export async function isFamilyArchived(id: number): Promise<boolean> {
+  const [row] = await db
+    .select({ archivedAt: schema.families.archivedAt })
+    .from(schema.families)
+    .where(eq(schema.families.id, id));
+  return row?.archivedAt != null;
+}
+
+export async function isSubfamilyArchived(id: number): Promise<boolean> {
+  const [row] = await db
+    .select({ archivedAt: schema.subfamilies.archivedAt })
+    .from(schema.subfamilies)
+    .where(eq(schema.subfamilies.id, id));
+  return row?.archivedAt != null;
+}
 
 export type ItemStatusFilter = 'active' | 'inactive' | 'archived';
 
@@ -155,11 +419,14 @@ export async function listItemsWithCategory(): Promise<ItemWithCategoryRow[]> {
       .innerJoin(schema.subfamilies, eq(schema.subfamilies.id, schema.items.subfamilyId))
       .innerJoin(schema.families, eq(schema.families.id, schema.subfamilies.familyId))
       .innerJoin(schema.categories, eq(schema.categories.id, schema.families.categoryId))
-      // El picker solo ofrece lo vendible. Ojo: esto es lo que obliga a que la
-      // pantalla del POS lea el nombre de una linea de `line.itemName` (que
-      // viene de la API) y no de este array, o una linea de un item archivado
-      // se quedaria sin nombre.
-      .where(sellableItem)
+      // El picker solo ofrece lo vendible, y vendible es el item Y toda su
+      // ascendencia: archivar una categoria saca del POS todo lo que cuelga
+      // de ella sin escribir una sola fila en sus hijos.
+      //
+      // Ojo: esto es lo que obliga a que la pantalla del POS lea el nombre de
+      // una linea de `line.itemName` (que viene de la API) y no de este
+      // array, o una linea de un item archivado se quedaria sin nombre.
+      .where(sellableWithAncestry)
   );
 }
 

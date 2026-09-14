@@ -14,19 +14,18 @@
 	import { itemState } from '$lib/status.js';
 	import { toasts } from '$lib/toasts.svelte.js';
 
-	interface Category {
+	interface TreeNode {
 		id: number;
 		name: string;
+		status: 'active' | 'inactive';
+		archivedAt: string | null;
 	}
-	interface Family {
-		id: number;
+	interface Category extends TreeNode {}
+	interface Family extends TreeNode {
 		categoryId: number;
-		name: string;
 	}
-	interface Subfamily {
-		id: number;
+	interface Subfamily extends TreeNode {
 		familyId: number;
-		name: string;
 	}
 	interface Item {
 		id: number;
@@ -61,6 +60,20 @@
 		{ value: 'inactive', label: 'Inactivos' },
 		{ value: 'archived', label: 'Archivados' },
 	];
+
+	// Cada columna filtra por SU propio estado, no por el de sus padres. Es lo
+	// que permite encontrar una subfamilia archivada bajo una categoría activa
+	// sin tener que adivinar dónde quedó.
+	const LEVEL_PATH: Record<Level, string> = {
+		category: 'categories',
+		family: 'families',
+		subfamily: 'subfamilies',
+	};
+	const LEVEL_NAME: Record<Level, string> = {
+		category: 'categoría',
+		family: 'familia',
+		subfamily: 'subfamilia',
+	};
 
 	let categories = $state<Category[]>([]);
 	let families = $state<Family[]>([]);
@@ -99,6 +112,18 @@
 	let itemStatusFilter = $state<ItemStatusFilter>('active');
 	let itemToArchive = $state<Item | null>(null);
 
+	let categoryFilter = $state<ItemStatusFilter>('active');
+	let familyFilter = $state<ItemStatusFilter>('active');
+	let subfamilyFilter = $state<ItemStatusFilter>('active');
+
+	// --- edición y archivado de los niveles del árbol ---
+	let nodeFormFor = $state<Level | null>(null);
+	let nodeFormId = $state<number | null>(null);
+	let nodeFormName = $state('');
+	let nodeFormStatus = $state<'active' | 'inactive'>('active');
+	let savingNode = $state(false);
+	let nodeToArchive = $state<{ level: Level; node: TreeNode } | null>(null);
+
 	let modifierGroupToAssociate = $state<number | null>(null);
 
 	const selectedItem = $derived(items.find((item) => item.id === selectedItemId) ?? null);
@@ -126,7 +151,7 @@
 	}
 
 	async function loadCategories() {
-		const response = await apiFetch('/catalog/categories');
+		const response = await apiFetch(`/catalog/categories?status=${categoryFilter}`);
 		if (response.ok) {
 			categories = ((await response.json()) as { categories: Category[] }).categories;
 		}
@@ -143,14 +168,18 @@
 	}
 
 	async function loadFamilies(categoryId: number) {
-		const response = await apiFetch(`/catalog/families?categoryId=${categoryId}`);
+		const response = await apiFetch(
+			`/catalog/families?categoryId=${categoryId}&status=${familyFilter}`,
+		);
 		if (response.ok) {
 			families = ((await response.json()) as { families: Family[] }).families;
 		}
 	}
 
 	async function loadSubfamilies(familyId: number) {
-		const response = await apiFetch(`/catalog/subfamilies?familyId=${familyId}`);
+		const response = await apiFetch(
+			`/catalog/subfamilies?familyId=${familyId}&status=${subfamilyFilter}`,
+		);
 		if (response.ok) {
 			subfamilies = ((await response.json()) as { subfamilies: Subfamily[] }).subfamilies;
 		}
@@ -275,6 +304,97 @@
 		} finally {
 			savingLevel = false;
 		}
+	}
+
+	function changeCategoryFilter() {
+		selectedCategoryId = null;
+		selectedFamilyId = null;
+		selectedSubfamilyId = null;
+		selectedItemId = null;
+		families = [];
+		subfamilies = [];
+		items = [];
+		loadCategories();
+	}
+
+	function changeFamilyFilter() {
+		selectedFamilyId = null;
+		selectedSubfamilyId = null;
+		selectedItemId = null;
+		subfamilies = [];
+		items = [];
+		if (selectedCategoryId !== null) loadFamilies(selectedCategoryId);
+	}
+
+	function changeSubfamilyFilter() {
+		selectedSubfamilyId = null;
+		selectedItemId = null;
+		items = [];
+		if (selectedFamilyId !== null) loadSubfamilies(selectedFamilyId);
+	}
+
+	async function reloadLevel(level: Level) {
+		if (level === 'category') await loadCategories();
+		else if (level === 'family' && selectedCategoryId !== null) await loadFamilies(selectedCategoryId);
+		else if (level === 'subfamily' && selectedFamilyId !== null) await loadSubfamilies(selectedFamilyId);
+	}
+
+	function startEditNode(level: Level, node: TreeNode) {
+		nodeFormFor = level;
+		nodeFormId = node.id;
+		nodeFormName = node.name;
+		nodeFormStatus = node.status;
+	}
+
+	async function saveNode() {
+		const level = nodeFormFor;
+		const name = nodeFormName.trim();
+		if (!level || nodeFormId === null || !name) return;
+		savingNode = true;
+		try {
+			const response = await apiFetch(`/catalog/${LEVEL_PATH[level]}/${nodeFormId}`, {
+				method: 'PATCH',
+				body: JSON.stringify({ name, status: nodeFormStatus }),
+			});
+			if (!response.ok) {
+				toasts.error(await apiErrorMessage(response, 'No se pudo guardar.'));
+				return;
+			}
+			nodeFormFor = null;
+			await reloadLevel(level);
+			toasts.success(`«${name}» actualizada.`);
+		} finally {
+			savingNode = false;
+		}
+	}
+
+	async function archiveNode() {
+		const target = nodeToArchive;
+		if (!target) return;
+		const response = await apiFetch(
+			`/catalog/${LEVEL_PATH[target.level]}/${target.node.id}/archive`,
+			{ method: 'POST' },
+		);
+		if (!response.ok) {
+			toasts.error(await apiErrorMessage(response, 'No se pudo archivar.'));
+			return;
+		}
+		await reloadLevel(target.level);
+		toasts.success(
+			`«${target.node.name}» archivada. Todo lo que colgaba de ella sale del POS.`,
+		);
+	}
+
+	async function restoreNode(level: Level, node: TreeNode) {
+		const response = await apiFetch(`/catalog/${LEVEL_PATH[level]}/${node.id}/restore`, {
+			method: 'POST',
+		});
+		if (!response.ok) {
+			toasts.error(await apiErrorMessage(response, 'No se pudo restaurar.'));
+			return;
+		}
+		await reloadLevel(level);
+		toasts.success(`«${node.name}» restaurada como inactiva. Actívala para volver a usarla.`);
 	}
 
 	function startCreateItem() {
@@ -422,24 +542,69 @@
 		<div class="tree-col">
 			<header>
 				<h2>Categorías</h2>
-				<Button
-					size="sm"
-					variant="ghost"
-					icon="plus"
-					aria-label="Nueva categoría"
-					onclick={() => startCreateLevel('category')}
-				/>
+				<div class="level-actions">
+				<select
+					aria-label="Estado de las categorías"
+					bind:value={categoryFilter}
+					onchange={changeCategoryFilter}
+				>
+					{#each ITEM_FILTERS as filter (filter.value)}
+						<option value={filter.value}>{filter.label}</option>
+					{/each}
+				</select>
+					{#if categoryFilter !== 'archived'}
+						<Button
+							size="sm"
+							variant="ghost"
+							icon="plus"
+							aria-label="Nueva categoría"
+							onclick={() => startCreateLevel('category')}
+						/>
+					{/if}
+				</div>
 			</header>
 			{#if categories.length === 0}
 				<p class="muted">Sin categorías.</p>
 			{:else}
 				<DataList>
 					{#each categories as category (category.id)}
+						{@const state = itemState(category)}
 						<DataListRow
 							title={category.name}
 							selected={category.id === selectedCategoryId}
 							onclick={() => selectCategory(category.id)}
-						/>
+						>
+							{#if category.archivedAt || category.status !== 'active'}
+								<Badge tone={state.tone}>{state.label}</Badge>
+							{/if}
+							{#snippet actions()}
+								{#if category.archivedAt}
+									<Button
+										size="sm"
+										variant="ghost"
+										aria-label="Restaurar {category.name}"
+										onclick={() => restoreNode('category', category)}
+									>
+										Restaurar
+									</Button>
+								{:else}
+									<Button
+										size="sm"
+										variant="ghost"
+										icon="edit"
+										aria-label="Editar {category.name}"
+										onclick={() => startEditNode('category', category)}
+									/>
+									<Button
+										size="sm"
+										variant="danger"
+										icon="trash"
+										aria-label="Archivar {category.name}"
+										onclick={() => (nodeToArchive = { level: 'category', node: category })}
+									/>
+								{/if}
+							{/snippet}
+						</DataListRow>
 					{/each}
 				</DataList>
 			{/if}
@@ -448,15 +613,26 @@
 		<div class="tree-col">
 			<header>
 				<h2>Familias</h2>
-				{#if selectedCategoryId !== null}
-					<Button
-						size="sm"
-						variant="ghost"
-						icon="plus"
-						aria-label="Nueva familia"
-						onclick={() => startCreateLevel('family')}
-					/>
-				{/if}
+				<div class="level-actions">
+				<select
+					aria-label="Estado de las familias"
+					bind:value={familyFilter}
+					onchange={changeFamilyFilter}
+				>
+					{#each ITEM_FILTERS as filter (filter.value)}
+						<option value={filter.value}>{filter.label}</option>
+					{/each}
+				</select>
+					{#if selectedCategoryId !== null && familyFilter !== 'archived'}
+						<Button
+							size="sm"
+							variant="ghost"
+							icon="plus"
+							aria-label="Nueva familia"
+							onclick={() => startCreateLevel('family')}
+						/>
+					{/if}
+				</div>
 			</header>
 			{#if selectedCategoryId === null}
 				<p class="muted">Elige una categoría.</p>
@@ -465,11 +641,43 @@
 			{:else}
 				<DataList>
 					{#each families as family (family.id)}
+						{@const state = itemState(family)}
 						<DataListRow
 							title={family.name}
 							selected={family.id === selectedFamilyId}
 							onclick={() => selectFamily(family.id)}
-						/>
+						>
+							{#if family.archivedAt || family.status !== 'active'}
+								<Badge tone={state.tone}>{state.label}</Badge>
+							{/if}
+							{#snippet actions()}
+								{#if family.archivedAt}
+									<Button
+										size="sm"
+										variant="ghost"
+										aria-label="Restaurar {family.name}"
+										onclick={() => restoreNode('family', family)}
+									>
+										Restaurar
+									</Button>
+								{:else}
+									<Button
+										size="sm"
+										variant="ghost"
+										icon="edit"
+										aria-label="Editar {family.name}"
+										onclick={() => startEditNode('family', family)}
+									/>
+									<Button
+										size="sm"
+										variant="danger"
+										icon="trash"
+										aria-label="Archivar {family.name}"
+										onclick={() => (nodeToArchive = { level: 'family', node: family })}
+									/>
+								{/if}
+							{/snippet}
+						</DataListRow>
 					{/each}
 				</DataList>
 			{/if}
@@ -478,15 +686,26 @@
 		<div class="tree-col">
 			<header>
 				<h2>Subfamilias</h2>
-				{#if selectedFamilyId !== null}
-					<Button
-						size="sm"
-						variant="ghost"
-						icon="plus"
-						aria-label="Nueva subfamilia"
-						onclick={() => startCreateLevel('subfamily')}
-					/>
-				{/if}
+				<div class="level-actions">
+				<select
+					aria-label="Estado de las subfamilias"
+					bind:value={subfamilyFilter}
+					onchange={changeSubfamilyFilter}
+				>
+					{#each ITEM_FILTERS as filter (filter.value)}
+						<option value={filter.value}>{filter.label}</option>
+					{/each}
+				</select>
+					{#if selectedFamilyId !== null && subfamilyFilter !== 'archived'}
+						<Button
+							size="sm"
+							variant="ghost"
+							icon="plus"
+							aria-label="Nueva subfamilia"
+							onclick={() => startCreateLevel('subfamily')}
+						/>
+					{/if}
+				</div>
 			</header>
 			{#if selectedFamilyId === null}
 				<p class="muted">Elige una familia.</p>
@@ -495,11 +714,43 @@
 			{:else}
 				<DataList>
 					{#each subfamilies as subfamily (subfamily.id)}
+						{@const state = itemState(subfamily)}
 						<DataListRow
 							title={subfamily.name}
 							selected={subfamily.id === selectedSubfamilyId}
 							onclick={() => selectSubfamily(subfamily.id)}
-						/>
+						>
+							{#if subfamily.archivedAt || subfamily.status !== 'active'}
+								<Badge tone={state.tone}>{state.label}</Badge>
+							{/if}
+							{#snippet actions()}
+								{#if subfamily.archivedAt}
+									<Button
+										size="sm"
+										variant="ghost"
+										aria-label="Restaurar {subfamily.name}"
+										onclick={() => restoreNode('subfamily', subfamily)}
+									>
+										Restaurar
+									</Button>
+								{:else}
+									<Button
+										size="sm"
+										variant="ghost"
+										icon="edit"
+										aria-label="Editar {subfamily.name}"
+										onclick={() => startEditNode('subfamily', subfamily)}
+									/>
+									<Button
+										size="sm"
+										variant="danger"
+										icon="trash"
+										aria-label="Archivar {subfamily.name}"
+										onclick={() => (nodeToArchive = { level: 'subfamily', node: subfamily })}
+									/>
+								{/if}
+							{/snippet}
+						</DataListRow>
 					{/each}
 				</DataList>
 			{/if}
@@ -801,6 +1052,42 @@
 	{/snippet}
 </Modal>
 
+<Modal
+	open={nodeFormFor !== null}
+	title={nodeFormFor ? `Editar ${LEVEL_NAME[nodeFormFor]}` : ''}
+	size="sm"
+	onclose={() => (nodeFormFor = null)}
+>
+	<Field label="Nombre" bind:value={nodeFormName} required />
+	<Field
+		label="Estado"
+		hint="Inactiva saca del POS todo lo que cuelga de ella, pero la deja en el catálogo."
+	>
+		{#snippet control({ id })}
+			<select {id} bind:value={nodeFormStatus}>
+				<option value="active">Activa</option>
+				<option value="inactive">Inactiva</option>
+			</select>
+		{/snippet}
+	</Field>
+	{#snippet footer()}
+		<Button variant="ghost" disabled={savingNode} onclick={() => (nodeFormFor = null)}>
+			Cancelar
+		</Button>
+		<Button variant="primary" loading={savingNode} onclick={saveNode}>Guardar cambios</Button>
+	{/snippet}
+</Modal>
+
+<ConfirmDialog
+	open={nodeToArchive !== null}
+	title="¿Archivar {nodeToArchive ? LEVEL_NAME[nodeToArchive.level] : ''}?"
+	message="«{nodeToArchive?.node.name ??
+		''}» y todo lo que cuelga de ella dejarán de aparecer en el POS. No se borra nada: sus hijos conservan su propio estado y vuelven tal cual al restaurarla."
+	confirmLabel="Archivar"
+	onconfirm={archiveNode}
+	onclose={() => (nodeToArchive = null)}
+/>
+
 <ConfirmDialog
 	open={itemToArchive !== null}
 	title="¿Archivar el ítem?"
@@ -876,10 +1163,17 @@
 		gap: var(--space-2);
 	}
 
-	.item-actions {
+	.item-actions,
+	.level-actions {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
+	}
+
+	.level-actions select {
+		min-height: var(--control-h-sm);
+		font-size: var(--text-sm);
+		max-width: 7.5rem;
 	}
 
 	.item-actions select {

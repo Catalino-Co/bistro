@@ -1,6 +1,7 @@
 import { db, schema } from '@bistro/db';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { recordAuditEvent } from '../audit/audit.repo.js';
+import { isItemSellable } from '../catalog/catalog.repo.js';
 import { printStationTickets, type PrintStationResult } from '../kitchen/kitchen.repo.js';
 import { sumPaymentsAmount } from '../payments/payments.repo.js';
 import { computeOrderTotals } from './order-totals.repo.js';
@@ -299,7 +300,9 @@ export async function addOrderLine(
     if (!item) {
       return { outcome: 'item_not_found' };
     }
-    if (item.status !== 'active' || item.archivedAt !== null) {
+    // No basta con mirar el item: archivar su categoria tambien lo saca de la
+    // venta, y esa condicion vive en catalog.repo.ts junto al resto.
+    if (item.status !== 'active' || item.archivedAt !== null || !(await isItemSellable(itemId))) {
       return { outcome: 'item_not_available' };
     }
 

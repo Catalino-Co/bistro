@@ -1,6 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import {
   archiveItem,
+  archiveTreeNode,
+  isCategoryArchived,
+  isFamilyArchived,
+  isSubfamilyArchived,
+  restoreTreeNode,
+  updateTreeNode,
+  type TreeLevel,
   createCategory,
   createFamily,
   createItem,
@@ -20,6 +27,10 @@ import {
 } from './catalog.repo.js';
 import {
   familyBodySchema,
+  listFamiliesQuerySchema,
+  listNodesQuerySchema,
+  listSubfamiliesQuerySchema,
+  updateNodeBodySchema,
   itemBodySchema,
   itemStationBodySchema,
   kitchenStationBodySchema,
@@ -41,9 +52,18 @@ export async function catalogRoutes(app: FastifyInstance) {
     taxRates: await listTaxRates(),
   }));
 
-  app.get('/catalog/categories', { config: { permissions: [...MANAGE_CATALOG] } }, async () => ({
-    categories: await listCategories(),
-  }));
+  app.get(
+    '/catalog/categories',
+    { config: { permissions: [...MANAGE_CATALOG] } },
+    async (request, reply) => {
+      const parsed = listNodesQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: 'invalid_request' };
+      }
+      return { categories: await listCategories(parsed.data.status) };
+    },
+  );
 
   app.post(
     '/catalog/categories',
@@ -62,9 +82,13 @@ export async function catalogRoutes(app: FastifyInstance) {
   app.get(
     '/catalog/families',
     { config: { permissions: [...MANAGE_CATALOG] } },
-    async (request) => {
-      const { categoryId } = request.query as { categoryId?: string };
-      return { families: await listFamilies(categoryId ? Number(categoryId) : undefined) };
+    async (request, reply) => {
+      const parsed = listFamiliesQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: 'invalid_request' };
+      }
+      return { families: await listFamilies(parsed.data.categoryId, parsed.data.status) };
     },
   );
 
@@ -77,6 +101,11 @@ export async function catalogRoutes(app: FastifyInstance) {
         reply.code(400);
         return { error: 'invalid_request' };
       }
+      // Colgar algo nuevo de un padre archivado es crear basura invisible.
+      if (await isCategoryArchived(parsed.data.categoryId)) {
+        reply.code(409);
+        return { error: 'parent_archived' };
+      }
       reply.code(201);
       return { family: await createFamily(parsed.data.categoryId, parsed.data.name) };
     },
@@ -85,9 +114,13 @@ export async function catalogRoutes(app: FastifyInstance) {
   app.get(
     '/catalog/subfamilies',
     { config: { permissions: [...MANAGE_CATALOG] } },
-    async (request) => {
-      const { familyId } = request.query as { familyId?: string };
-      return { subfamilies: await listSubfamilies(familyId ? Number(familyId) : undefined) };
+    async (request, reply) => {
+      const parsed = listSubfamiliesQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: 'invalid_request' };
+      }
+      return { subfamilies: await listSubfamilies(parsed.data.familyId, parsed.data.status) };
     },
   );
 
@@ -99,6 +132,10 @@ export async function catalogRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         reply.code(400);
         return { error: 'invalid_request' };
+      }
+      if (await isFamilyArchived(parsed.data.familyId)) {
+        reply.code(409);
+        return { error: 'parent_archived' };
       }
       reply.code(201);
       return { subfamily: await createSubfamily(parsed.data.familyId, parsed.data.name) };
@@ -133,6 +170,10 @@ export async function catalogRoutes(app: FastifyInstance) {
         reply.code(400);
         return { error: 'invalid_request' };
       }
+      if (await isSubfamilyArchived(parsed.data.subfamilyId)) {
+        reply.code(409);
+        return { error: 'parent_archived' };
+      }
       reply.code(201);
       return {
         item: await createItem(
@@ -145,6 +186,92 @@ export async function catalogRoutes(app: FastifyInstance) {
       };
     },
   );
+
+  // Renombrar, pausar, archivar y restaurar los tres niveles del arbol. Las
+  // tres rutas se registran en bucle porque las reglas son identicas: lo unico
+  // que cambia es el segmento de la URL y la tabla detras.
+  const TREE_ROUTES: { path: string; level: TreeLevel }[] = [
+    { path: 'categories', level: 'category' },
+    { path: 'families', level: 'family' },
+    { path: 'subfamilies', level: 'subfamily' },
+  ];
+
+  for (const { path, level } of TREE_ROUTES) {
+    app.patch(
+      `/catalog/${path}/:id`,
+      { config: { permissions: [...MANAGE_CATALOG] } },
+      async (request, reply) => {
+        const parsed = updateNodeBodySchema.safeParse(request.body);
+        if (!parsed.success) {
+          reply.code(400);
+          return { error: 'invalid_request' };
+        }
+        const result = await updateTreeNode(
+          level,
+          Number((request.params as { id: string }).id),
+          parsed.data,
+          request.session.userId!,
+          request.session.branchId,
+        );
+        switch (result.outcome) {
+          case 'not_found':
+            reply.code(404);
+            return { error: 'not_found' };
+          case 'archived':
+            reply.code(409);
+            return { error: 'node_archived' };
+          case 'updated':
+            return { node: result.node };
+        }
+      },
+    );
+
+    app.post(
+      `/catalog/${path}/:id/archive`,
+      { config: { permissions: [...MANAGE_CATALOG] } },
+      async (request, reply) => {
+        const result = await archiveTreeNode(
+          level,
+          Number((request.params as { id: string }).id),
+          request.session.userId!,
+          request.session.branchId,
+        );
+        switch (result.outcome) {
+          case 'not_found':
+            reply.code(404);
+            return { error: 'not_found' };
+          case 'already_archived':
+            reply.code(409);
+            return { error: 'already_archived' };
+          case 'archived':
+            return { node: result.node };
+        }
+      },
+    );
+
+    app.post(
+      `/catalog/${path}/:id/restore`,
+      { config: { permissions: [...MANAGE_CATALOG] } },
+      async (request, reply) => {
+        const result = await restoreTreeNode(
+          level,
+          Number((request.params as { id: string }).id),
+          request.session.userId!,
+          request.session.branchId,
+        );
+        switch (result.outcome) {
+          case 'not_found':
+            reply.code(404);
+            return { error: 'not_found' };
+          case 'not_archived':
+            reply.code(409);
+            return { error: 'not_archived' };
+          case 'restored':
+            return { node: result.node };
+        }
+      },
+    );
+  }
 
   // Editar un item. Antes de esto no habia forma de cambiarle el nombre ni el
   // precio: el unico PATCH que existia era el de la estacion.

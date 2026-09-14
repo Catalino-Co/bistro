@@ -8,9 +8,18 @@ import { kitchenStations } from './kitchen.js';
 // to create a subfamily at all (rest_insert_category.php never even sent
 // inc_family/inc_subfamily), so reports could filter by subfamily but
 // nothing could create one outside of SQL.
+// Los tres niveles del arbol y los items comparten el mismo par de estados:
+//   status = 'inactive'  -> pausa. Fuera del POS, sigue en el catalogo.
+//   archivedAt != null   -> retiro. Fuera del catalogo tambien, recuperable.
+//
+// Archivar un nivel NO escribe nada en sus hijos: lo que los oculta del POS
+// es que la consulta del picker exige toda la ascendencia vendible. Asi
+// restaurar una categoria devuelve exactamente el estado que tenia cada
+// hijo, sin tener que recordar cual ya estaba archivado por su cuenta.
 export const categories = bistro.table('categories', {
   id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
   name: text('name').notNull(),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
   status: statusEnum('status').notNull().default('active'),
 });
 
@@ -20,6 +29,7 @@ export const families = bistro.table('families', {
     .notNull()
     .references(() => categories.id),
   name: text('name').notNull(),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
   status: statusEnum('status').notNull().default('active'),
 });
 
@@ -29,6 +39,7 @@ export const subfamilies = bistro.table('subfamilies', {
     .notNull()
     .references(() => families.id),
   name: text('name').notNull(),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
   status: statusEnum('status').notNull().default('active'),
 });
 

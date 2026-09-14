@@ -22,6 +22,27 @@ export const itemBodySchema = z.object({
   stationId: z.number().int().positive().optional(),
 });
 
+// Renombrar o pausar un nivel del arbol. Igual que en items, `archived` no
+// esta aqui: archivar tiene su propia ruta y su propia clave de bitacora.
+export const updateNodeBodySchema = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    status: z.enum(['active', 'inactive']).optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, { message: 'nada que actualizar' });
+
+export const listNodesQuerySchema = z.object({
+  status: z.enum(['active', 'inactive', 'archived']).default('active'),
+});
+
+export const listFamiliesQuerySchema = listNodesQuerySchema.extend({
+  categoryId: z.coerce.number().int().positive().optional(),
+});
+
+export const listSubfamiliesQuerySchema = listNodesQuerySchema.extend({
+  familyId: z.coerce.number().int().positive().optional(),
+});
+
 // Lo que se puede editar de un item. `archived` NO esta aqui a proposito:
 // archivar es una accion con su propia ruta, su confirmacion y su clave de
 // bitacora, no un valor mas de un desplegable.

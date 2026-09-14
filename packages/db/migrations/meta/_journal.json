@@ -134,6 +134,13 @@
       "when": 1789345309602,
       "tag": "0018_flat_redwing",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789348064226,
+      "tag": "0019_puzzling_demogoblin",
+      "breakpoints": true
     }
   ]
 }
